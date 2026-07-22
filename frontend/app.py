@@ -131,7 +131,7 @@ with tab4:
                 df = pd.DataFrame(rows)
 
                 def fmt_time(v):
-                    if v is None:
+                    if v is None or pd.isna(v):
                         return None
                     total_seconds = int(v.total_seconds())
                     h, rem = divmod(total_seconds, 3600)
