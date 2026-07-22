@@ -24,6 +24,8 @@ every `EXPLAIN ANALYZE` plan and every query committed to this repo.
 - [Data Quality Notes](#data-quality-notes)
 - [Optimization Techniques Covered](#optimization-techniques-covered)
 - [Setup](#setup)
+- [Why These 10 Queries](#why-these-10-queries)
+- [What This Project Does Not Model](#what-this-project-does-not-model)
 - [Results — 10 Query Case Studies](#results--10-query-case-studies)
 - [Reading the Results Honestly](#reading-the-results-honestly)
 - [Write-Path Optimization](#write-path-optimization-bulk-vs-row-by-row-insert)
@@ -167,6 +169,67 @@ including cases where a technique didn't help — see below.
 2. Copy the CSVs into MySQL's `secure_file_priv` folder
 3. Run `sql/schema.sql` — creates the raw, unindexed tables
 4. Run `sql/load.sql` — loads and verifies row counts
+
+## Why These 10 Queries
+
+The 10 weren't picked at random — each maps to a real access pattern
+this schema would actually see, and together they were chosen to hit
+every technique in the list above at least once:
+
+| Query | Real-world analogue |
+|---|---|
+| Q1, Q2 | Station dashboard / ops reporting ("which stations are busiest, how long do trains halt") — heavy aggregation over the whole fact table, the kind of query a nightly report or admin panel would run |
+| Q3 | Passenger-facing search ("what trains pass through my station this morning") — a selective, latency-sensitive lookup, the most common query shape in a real booking/enquiry system |
+| Q4, Q9 | Scheduling/ops filter by day-of-week — deliberately chosen as a *pair* (index vs partition on the same low-cardinality column) to show the same real filter solved two different ways, including where each one stops helping |
+| Q5 | Analytics ("longest halt per train") — a per-group ranking, the exact shape that tempts people into a correlated subquery in real reporting code |
+| Q6 | Catalog/filter query ("stations served by premium trains") — the classic `IN`/`EXISTS`/`JOIN` decision every backend developer eventually has to make |
+| Q7 | Any API endpoint returning train details — `SELECT *` is extremely common in real backend code and easy to overlook as a cost |
+| Q8 | Any paginated API/UI (train list, search results) — OFFSET pagination is the default nearly every ORM generates, and the one that quietly falls over at scale |
+| Q10 | A live dashboard reloading a station-summary aggregate on every page view — the case for a summary table over recomputing |
+
+The two intentionally excluded from the list are: (a) point lookups by
+primary key, which are already fast without any of this and wouldn't
+demonstrate anything, and (b) full-text train-name search
+(`LIKE '%Express%'`), which the README's Optimization Techniques
+section flags but isn't benchmarked here — a real fix needs `FULLTEXT`
+indexing or an external search engine, not a B-tree prefix index, and
+was left as a stated-but-not-implemented case rather than faked.
+
+## What This Project Does *Not* Model
+
+Being direct about the limits of a single-connection, read-optimized
+benchmark, since a real railway booking/enquiry system's workload
+would stress things this project never touches:
+
+- **Every benchmark here is read-only, single-connection.** All 10
+  timings are one client, one query at a time, on an otherwise idle
+  server. A real system would have concurrent readers *and* writers
+  hitting `schedules` simultaneously — row-lock contention, gap locks
+  from range scans, and replication lag are not exercised anywhere in
+  this repo. The reported numbers are best-case latency, not
+  throughput under load.
+- **Every index added has a write-side cost this project never
+  measures.** By the end of the 10 case studies, `schedules` carries
+  4 secondary indexes and `trains` carries 2 — each one is extra work
+  on every `INSERT`/`UPDATE`/`DELETE` (index maintenance, extra
+  B-tree pages, more WAL/redo log volume) and extra disk space. For a
+  fact table that's genuinely write-heavy in production (railways
+  schedule data changes far less often than it's read, so this
+  particular tradeoff would lean read-optimized in real life — but
+  that's a judgment call this README hadn't stated explicitly until
+  now, not a benchmarked one).
+- **The write-path benchmark (bulk vs row-by-row insert) is isolated,
+  not concurrent** — it measures one client loading 5,000 rows against
+  an unlocked table, not insert throughput while the 10 read queries
+  above are also running against the same rows.
+- **No connection pooling, replica reads, or caching layer** are
+  modeled. A production system would likely put a cache (Redis) or a
+  read replica in front of the Q1/Q2/Q10-style dashboard queries
+  rather than relying solely on the summary-table trick shown in Q10.
+
+The honest scope of this project is: *diagnosing and fixing single-query
+latency on a realistic schema*, not capacity planning or
+concurrency/throughput engineering for a production system.
 
 ## Results — 10 Query Case Studies
 
