@@ -1,1 +1,6 @@
--> Index lookup on schedules using idx_sched_day (day=1)  (cost=19990 rows=167463) (actual time=0.582..707 rows=183993 loops=1)
+-> Table scan on <temporary>  (cost=8465..8555 rows=7037) (actual time=132..133 rows=2859 loops=1)
+    -> Temporary table with deduplication  (cost=8465..8465 rows=7037) (actual time=132..132 rows=2859 loops=1)
+        -> Nested loop inner join  (cost=7761 rows=7037) (actual time=0.338..105 rows=19749 loops=1)
+            -> Filter: (t.train_type in ('Raj','Drnt'))  (cost=23 rows=96) (actual time=0.0274..0.695 rows=96 loops=1)
+                -> Covering index range scan on t using idx_trains_type over (train_type = 'Drnt') OR (train_type = 'Raj')  (cost=23 rows=96) (actual time=0.0251..0.447 rows=96 loops=1)
+            -> Index lookup on sch using idx_sched_trainnum (train_number=t.train_number)  (cost=73.4 rows=73.3) (actual time=0.314..1.06 rows=206 loops=96)

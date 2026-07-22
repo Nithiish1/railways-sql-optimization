@@ -1,1 +1,0 @@
--> Table scan on station_traffic_summary  (cost=798 rows=7664) (actual time=0.0821..5.88 rows=7499 loops=1)

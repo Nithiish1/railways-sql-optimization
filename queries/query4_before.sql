@@ -1,3 +1,5 @@
-SELECT train_number, station_code, arrival, departure
+SELECT DISTINCT station_code, station_name
         FROM schedules
-        WHERE day = 1;
+        WHERE train_number IN (
+            SELECT train_number FROM trains WHERE train_type IN ('Raj', 'Drnt')
+        );

@@ -1,7 +1,2 @@
-SELECT train_number, station_code, station_name, halt_seconds
-        FROM (
-            SELECT train_number, station_code, station_name, halt_seconds,
-                   RANK() OVER (PARTITION BY train_number ORDER BY halt_seconds DESC) AS rnk
-            FROM q5_working_set
-        ) ranked
-        WHERE rnk = 1;
+SELECT train_number, train_name, train_type, to_station_code, departure, arrival, distance
+        FROM trains WHERE from_station_code = 'NDLS';

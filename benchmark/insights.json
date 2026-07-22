@@ -186,8 +186,8 @@
   "zone_concentration": [
     {
       "zone": "KR",
-      "station_code": "MJO",
-      "station_name": "MAJORDA",
+      "station_code": "SRVX",
+      "station_name": "SURAVALI",
       "stop_count": 15,
       "zone_stop_count": 943,
       "pct_of_zone": "1.6"
@@ -202,8 +202,8 @@
     },
     {
       "zone": "SCR",
-      "station_code": "BMT",
-      "station_name": "BEGAMPET",
+      "station_code": "SC",
+      "station_name": "SECUNDERABAD JN",
       "stop_count": 179,
       "zone_stop_count": 26616,
       "pct_of_zone": "0.7"
@@ -258,8 +258,8 @@
     },
     {
       "zone": "CR",
-      "station_code": "THK",
-      "station_name": "THAKRULI",
+      "station_code": "KOPR",
+      "station_name": "KOPAR ROAD",
       "stop_count": 129,
       "zone_stop_count": 35015,
       "pct_of_zone": "0.4"
@@ -375,6 +375,175 @@
       "from_station_name": "BANGALORE CITY JN",
       "to_station_name": "NEW TINSUKIA JN",
       "distance": 3578
+    }
+  ],
+  "busiest_corridors": [
+    {
+      "from_station_name": "CHENNAI BEACH",
+      "to_station_name": "Velachery",
+      "train_count": 70
+    },
+    {
+      "from_station_name": "LINGAMPALLI",
+      "to_station_name": "KACHEGUDA FALAKNUMA",
+      "train_count": 30
+    },
+    {
+      "from_station_name": "CHENNAI BEACH",
+      "to_station_name": "TAMBARAM",
+      "train_count": 29
+    },
+    {
+      "from_station_name": "KACHEGUDA FALAKNUMA",
+      "to_station_name": "LINGAMPALLI",
+      "train_count": 28
+    },
+    {
+      "from_station_name": "HYDERABAD DECCAN",
+      "to_station_name": "LINGAMPALLI",
+      "train_count": 26
+    },
+    {
+      "from_station_name": "LINGAMPALLI",
+      "to_station_name": "HYDERABAD DECCAN",
+      "train_count": 23
+    },
+    {
+      "from_station_name": "HOWRAH JN",
+      "to_station_name": "PANSKURA",
+      "train_count": 21
+    },
+    {
+      "from_station_name": "PANSKURA",
+      "to_station_name": "HOWRAH JN",
+      "train_count": 16
+    },
+    {
+      "from_station_name": "CHENNAI BEACH",
+      "to_station_name": "CHENGALPATTU",
+      "train_count": 14
+    },
+    {
+      "from_station_name": "SULLURUPETA",
+      "to_station_name": "CHENNAI CENTRAL",
+      "train_count": 9
+    },
+    {
+      "from_station_name": "BARDDHAMAN JN",
+      "to_station_name": "ASANSOL JN",
+      "train_count": 9
+    },
+    {
+      "from_station_name": "GAYA JN",
+      "to_station_name": "PATNA JN",
+      "train_count": 9
+    },
+    {
+      "from_station_name": "PATNA JN",
+      "to_station_name": "GAYA JN",
+      "train_count": 9
+    },
+    {
+      "from_station_name": "JASIDIH JN",
+      "to_station_name": "Baidyanathdham Deoghar",
+      "train_count": 8
+    },
+    {
+      "from_station_name": "MYSORE JN",
+      "to_station_name": "BANGALORE CITY JN",
+      "train_count": 8
+    }
+  ],
+  "gateway_stations": [
+    {
+      "station_code": "ET",
+      "station_name": "ITARSI JN",
+      "distinct_zones": 16,
+      "distinct_trains": 293
+    },
+    {
+      "station_code": "BPL",
+      "station_name": "BHOPAL JN",
+      "distinct_zones": 16,
+      "distinct_trains": 233
+    },
+    {
+      "station_code": "BSL",
+      "station_name": "BHUSAVAL JN",
+      "distinct_zones": 16,
+      "distinct_trains": 230
+    },
+    {
+      "station_code": "DIVA",
+      "station_name": "DIVA",
+      "distinct_zones": 16,
+      "distinct_trains": 228
+    },
+    {
+      "station_code": "BINA",
+      "station_name": "BINA JN",
+      "distinct_zones": 16,
+      "distinct_trains": 222
+    },
+    {
+      "station_code": "JL",
+      "station_name": "JALGAON JN",
+      "distinct_zones": 16,
+      "distinct_trains": 220
+    },
+    {
+      "station_code": "BDI",
+      "station_name": "BHADLI",
+      "distinct_zones": 16,
+      "distinct_trains": 216
+    },
+    {
+      "station_code": "TRW",
+      "station_name": "TARSOD",
+      "distinct_zones": 16,
+      "distinct_trains": 216
+    },
+    {
+      "station_code": "SORI",
+      "station_name": "SORAI",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "SUMR",
+      "station_name": "SUMER",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "SUW",
+      "station_name": "SUKHISEWANIYAN",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "BAQ",
+      "station_name": "GANJ BASODA",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "BET",
+      "station_name": "BARETH",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "BHS",
+      "station_name": "VIDISHA",
+      "distinct_zones": 16,
+      "distinct_trains": 190
+    },
+    {
+      "station_code": "BVB",
+      "station_name": "BHADBHADAGHAT",
+      "distinct_zones": 16,
+      "distinct_trains": 190
     }
   ]
 }

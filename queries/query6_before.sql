@@ -1,5 +1,4 @@
-SELECT DISTINCT station_code, station_name
+SELECT id, train_number, station_code, arrival
         FROM schedules
-        WHERE train_number IN (
-            SELECT train_number FROM trains WHERE train_type IN ('Raj', 'Drnt')
-        );
+        ORDER BY id
+        LIMIT 20 OFFSET 300000;

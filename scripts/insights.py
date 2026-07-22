@@ -94,6 +94,40 @@ cur.execute("""
 """)
 insights["longest_routes"] = cur.fetchall()
 
+# ---------------------------------------------------------------- Insight 5
+# Busiest origin-destination corridors: which station pairs have the most
+# distinct trains running directly between them - the routes with the most
+# competition/redundancy (and, inversely, the ones with almost none).
+cur.execute("""
+    SELECT from_station_name, to_station_name, COUNT(DISTINCT train_number) AS train_count
+    FROM trains
+    WHERE from_station_code IS NOT NULL AND to_station_code IS NOT NULL
+      AND from_station_code <> to_station_code
+    GROUP BY from_station_code, to_station_code, from_station_name, to_station_name
+    ORDER BY train_count DESC
+    LIMIT 15
+""")
+insights["busiest_corridors"] = cur.fetchall()
+
+# ---------------------------------------------------------------- Insight 6
+# Gateway stations: stations where trains from the most DISTINCT railway
+# zones converge. Different from the chokepoint metric (train volume) -
+# this measures cross-zone connectivity. A station high on this list is
+# structurally important for inter-zone travel, not just busy in general.
+cur.execute("""
+    SELECT s.station_code, s.station_name,
+           COUNT(DISTINCT t.zone) AS distinct_zones,
+           COUNT(DISTINCT s.train_number) AS distinct_trains
+    FROM schedules s
+    JOIN trains t ON t.train_number = s.train_number
+    WHERE t.zone IS NOT NULL AND t.zone <> '' AND t.zone <> '?'
+    GROUP BY s.station_code, s.station_name
+    HAVING distinct_trains >= 20
+    ORDER BY distinct_zones DESC, distinct_trains DESC
+    LIMIT 15
+""")
+insights["gateway_stations"] = cur.fetchall()
+
 with open(os.path.join(ROOT, "benchmark", "insights.json"), "w") as f:
     json.dump(insights, f, indent=2, default=str)
 

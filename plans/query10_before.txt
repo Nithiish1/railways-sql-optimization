@@ -1,3 +1,0 @@
--> Group aggregate: count(0), count(distinct schedules.train_number), avg(timestampdiff(SECOND,schedules.arrival,schedules.departure))  (cost=76716 rows=17329) (actual time=0.27..4214 rows=7499 loops=1)
-    -> Filter: ((schedules.arrival is not null) and (schedules.departure is not null))  (cost=42763 rows=339526) (actual time=0.0814..3039 rows=384107 loops=1)
-        -> Index scan on schedules using idx_sched_station_train  (cost=42763 rows=419168) (actual time=0.0802..2893 rows=417080 loops=1)

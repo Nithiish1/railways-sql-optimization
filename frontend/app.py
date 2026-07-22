@@ -3,7 +3,7 @@ Streamlit dashboard for the Indian Railways SQL Optimization project.
 
 Two modes:
 - If a live MySQL connection is available (same creds as scripts/run_all.py),
-  Q3 (station + time-window lookup) runs live against the real database.
+  Q2 (station + time-window lookup) runs live against the real database.
 - Everything else (benchmark results, insights) reads from the committed
   JSON files in benchmark/, so the dashboard works even without a DB
   connection (e.g. when deployed to Streamlit Cloud).
@@ -23,7 +23,7 @@ st.set_page_config(page_title="Indian Railways SQL Optimization", page_icon="�
 st.title("🚆 Indian Railways SQL Optimization — Dashboard")
 st.caption(
     "A query-optimization case study on a real 417K-row Indian Railways dataset. "
-    "10 queries diagnosed and fixed with EXPLAIN ANALYZE, plus chokepoint/insight analysis."
+    "7 queries diagnosed and fixed with EXPLAIN ANALYZE, plus network/insight analysis."
 )
 
 
@@ -43,7 +43,7 @@ except FileNotFoundError:
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Benchmark Results", "🔎 Chokepoint Insights", "✍️ Write-Path", "🚉 Live Lookup"])
 
 with tab1:
-    st.subheader("Before vs After — all 10 query case studies")
+    st.subheader("Before vs After — all 7 query case studies")
     df = pd.DataFrame(results)
     df_display = df[["n", "title", "technique", "before_ms", "after_ms", "speedup"]]
     df_display.columns = ["#", "Query", "Technique", "Before (ms)", "After (ms)", "Speedup"]
@@ -55,12 +55,6 @@ with tab1:
         "After (ms)": [r["after_ms"] for r in results],
     }).set_index("Query")
     st.bar_chart(chart_df, height=380)
-
-    st.markdown(
-        "Three queries (**Q1, Q4, Q9**) show little or no improvement — "
-        "documented on purpose. See the README's *Reading the Results Honestly* "
-        "section for why."
-    )
 
 with tab2:
     if insights is None:
@@ -93,6 +87,18 @@ with tab2:
         lr_df = pd.DataFrame(insights["longest_routes"])
         st.dataframe(lr_df, use_container_width=True, hide_index=True)
 
+        if "busiest_corridors" in insights:
+            st.subheader("Busiest origin-destination corridors")
+            st.caption("Station pairs with the most distinct trains running directly between them.")
+            st.image("charts/busiest_corridors.png")
+            st.dataframe(pd.DataFrame(insights["busiest_corridors"]), use_container_width=True, hide_index=True)
+
+        if "gateway_stations" in insights:
+            st.subheader("Gateway stations (cross-zone connectivity hubs)")
+            st.caption("Stations where trains from the most distinct railway zones converge.")
+            st.image("charts/gateway_stations.png")
+            st.dataframe(pd.DataFrame(insights["gateway_stations"]), use_container_width=True, hide_index=True)
+
 with tab3:
     st.subheader("Write-path optimization: insert strategy")
     wp_df = pd.DataFrame({
@@ -107,7 +113,7 @@ with tab3:
     st.metric("Bulk vs autocommit speedup", f"{write_path['speedup_bulk_vs_autocommit']}x")
 
 with tab4:
-    st.subheader("Live lookup (Query 3): trains through a station in a time window")
+    st.subheader("Live lookup (Query 2): trains through a station in a time window")
     st.caption("Runs directly against MySQL if a local connection is available.")
     station_code = st.text_input("Station code", value="CNB")
     col1, col2 = st.columns(2)

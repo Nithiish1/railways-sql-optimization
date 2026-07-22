@@ -13,13 +13,6 @@ with open(os.path.join(ROOT, "benchmark", "results.json")) as f:
 with open(os.path.join(ROOT, "benchmark", "write_path_results.json")) as f:
     write_path = json.load(f)
 
-# Q1, Q4, Q9 showed no real improvement (documented in benchmark/results.json
-# and plans/ as intentional non-improvement cases) - excluded from the
-# headline README/presentation charts, which highlight the queries that
-# actually got faster.
-EXCLUDED = {1, 4, 9}
-results = [r for r in results if r["n"] not in EXCLUDED]
-
 plt.rcParams.update({
     "figure.facecolor": "white",
     "axes.facecolor": "white",

@@ -17,12 +17,6 @@ def img_b64(name):
 with open(os.path.join(ROOT, "benchmark", "results.json")) as f:
     results = json.load(f)
 
-# Q1, Q4, Q9 showed no real improvement (see benchmark/results.json and
-# plans/ for the full record) - excluded from the presentation, which
-# highlights the queries that actually got faster.
-EXCLUDED = {1, 4, 9}
-results = [r for r in results if r["n"] not in EXCLUDED]
-
 charts = {
     name: img_b64(name)
     for name in [
@@ -32,6 +26,8 @@ charts = {
         "chokepoint_stations.png",
         "unstable_trains.png",
         "zone_concentration.png",
+        "busiest_corridors.png",
+        "gateway_stations.png",
         "write_path_benchmark.png",
     ]
 }
@@ -90,9 +86,9 @@ html = f"""<!doctype html>
     <div class="kicker">SQL Optimization Case Study</div>
     <h1>🚆 Indian Railways SQL Optimization</h1>
     <p>Diagnosing and fixing slow queries on a real 417,080-row dataset<br>
-    with <code>EXPLAIN ANALYZE</code>, indexing, query rewriting, partitioning, and a materialized-view simulation.</p>
+    with <code>EXPLAIN ANALYZE</code>, indexing, query rewriting, and a materialized-view simulation.</p>
     <div class="badges">
-      <span>MySQL 8.0.37</span><span>Python 3.12</span><span>10 case studies</span><span>Best speedup: 70x</span>
+      <span>MySQL 8.0.37</span><span>Python 3.12</span><span>7 case studies</span><span>Best speedup: 183x</span>
     </div>
   </div>
 
@@ -161,6 +157,18 @@ html = f"""<!doctype html>
         <img src="data:image/png;base64,{charts['zone_concentration.png']}" style="max-height:40vh" alt="zone concentration">
       </div>
     </div>
+  </div>
+
+  <div class="slide">
+    <div class="kicker">Beyond optimization</div>
+    <h2>Busiest Origin-Destination Corridors</h2>
+    <img src="data:image/png;base64,{charts['busiest_corridors.png']}" alt="busiest corridors">
+  </div>
+
+  <div class="slide">
+    <div class="kicker">Beyond optimization</div>
+    <h2>Gateway Stations — Cross-Zone Connectivity Hubs</h2>
+    <img src="data:image/png;base64,{charts['gateway_stations.png']}" alt="gateway stations">
   </div>
 
   <div class="slide">

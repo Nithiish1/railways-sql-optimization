@@ -1,2 +1,2 @@
-SELECT train_number, train_name, train_type, to_station_code, departure, arrival, distance
-        FROM trains WHERE from_station_code = 'NDLS';
+SELECT station_code, station_name, total_stops, train_count, avg_halt_seconds
+        FROM station_traffic_summary;

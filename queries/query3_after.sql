@@ -1,4 +1,7 @@
-SELECT train_number, train_name, arrival, departure
-        FROM schedules
-        WHERE station_code = 'CNB' AND arrival BETWEEN '06:00:00' AND '10:00:00'
-        ORDER BY arrival;
+SELECT train_number, station_code, station_name, halt_seconds
+        FROM (
+            SELECT train_number, station_code, station_name, halt_seconds,
+                   RANK() OVER (PARTITION BY train_number ORDER BY halt_seconds DESC) AS rnk
+            FROM q_working_set
+        ) ranked
+        WHERE rnk = 1;

@@ -1,4 +1,5 @@
-SELECT train_number, train_name, arrival, departure
-        FROM schedules
-        WHERE station_code = 'CNB' AND arrival BETWEEN '06:00:00' AND '10:00:00'
-        ORDER BY arrival;
+SELECT s1.train_number, s1.station_code, s1.station_name, s1.halt_seconds
+        FROM q_working_set s1
+        WHERE s1.halt_seconds = (
+            SELECT MAX(s2.halt_seconds) FROM q_working_set s2 WHERE s2.train_number = s1.train_number
+        );

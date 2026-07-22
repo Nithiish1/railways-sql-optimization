@@ -1,2 +1,3 @@
--> Filter: (trains.from_station_code = 'NDLS')  (cost=1045 rows=362) (actual time=0.111..15.3 rows=80 loops=1)
-    -> Table scan on trains  (cost=1045 rows=3619) (actual time=0.0278..14.5 rows=5208 loops=1)
+-> Group aggregate: count(0), count(distinct schedules.train_number), avg(timestampdiff(SECOND,schedules.arrival,schedules.departure))  (cost=79703 rows=7840) (actual time=0.521..4271 rows=7499 loops=1)
+    -> Filter: ((schedules.arrival is not null) and (schedules.departure is not null))  (cost=45225 rows=344784) (actual time=0.413..2966 rows=384107 loops=1)
+        -> Index scan on schedules using idx_sched_halt  (cost=45225 rows=425659) (actual time=0.409..2788 rows=417080 loops=1)

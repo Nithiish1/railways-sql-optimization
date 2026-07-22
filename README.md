@@ -4,18 +4,18 @@
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Rows](https://img.shields.io/badge/schedules-417%2C080%20rows-16a085)
 ![Queries](https://img.shields.io/badge/case%20studies-7-orange)
-![Best speedup](https://img.shields.io/badge/best%20speedup-70x-success)
+![Best speedup](https://img.shields.io/badge/best%20speedup-183x-success)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 A query-optimization case study on a real, ~430K-row Indian Railways
 dataset (stations, trains, schedules) — diagnosing slow queries with
-`EXPLAIN ANALYZE`, fixing them through indexing, query rewriting,
-partitioning, and a materialized-view simulation, and measuring the
-before/after impact with a reproducible benchmark harness.
+`EXPLAIN ANALYZE`, fixing them through indexing, query rewriting, and
+a materialized-view simulation, and measuring the before/after impact
+with a reproducible benchmark harness.
 
 **TL;DR:** 7 real queries, each timed cold and hot (median of 5 runs),
-speedups from 1.4x up to **70x**, with every `EXPLAIN ANALYZE` plan and
-every query committed to this repo.
+speedups from 1.1x up to **183x**, with every `EXPLAIN ANALYZE` plan
+and every query committed to this repo.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ every query committed to this repo.
 - [What This Project Does Not Model](#what-this-project-does-not-model)
 - [Results — Query Case Studies](#results--query-case-studies)
 - [Write-Path Optimization](#write-path-optimization-bulk-vs-row-by-row-insert)
-- [Insights & Chokepoint Analysis](#insights--chokepoint-analysis)
+- [Insights & Network Analysis](#insights--network-analysis)
 - [Frontend Dashboard](#frontend-dashboard)
 - [Presentation](#presentation)
 - [Reproducing](#reproducing)
@@ -39,15 +39,15 @@ every query committed to this repo.
 railways-sql-optimization/
 ├── sql/schema.sql              # raw, unindexed table definitions
 ├── convert.py                  # GeoJSON -> flat CSV converter
-├── queries/                    # query{1-10}_{before,after}.sql
+├── queries/                    # query{1-7}_{before,after}.sql
 ├── plans/                      # EXPLAIN ANALYZE output, one file per query per state
 ├── benchmark/                  # results.json, write_path_results.json, insights.json
 ├── charts/                     # generated PNG charts (this README embeds them)
 ├── frontend/app.py             # Streamlit dashboard (benchmarks, insights, live lookup)
 ├── presentation/index.html     # self-contained slide-deck walkthrough
 └── scripts/
-    ├── run_all.py               # orchestrates all 10 case studies end-to-end
-    ├── insights.py              # chokepoint/instability/zone-concentration queries
+    ├── run_all.py               # orchestrates all 7 case studies end-to-end
+    ├── insights.py              # chokepoint/instability/zone/corridor/gateway queries
     ├── make_chart.py            # regenerates benchmark charts
     ├── make_insight_charts.py   # regenerates insight charts
     ├── make_presentation.py     # regenerates presentation/index.html
@@ -181,13 +181,13 @@ every technique in the list above at least once:
 
 | Query | Real-world analogue |
 |---|---|
-| Q2 | Station dashboard / ops reporting ("how long do trains halt at each station") — heavy aggregation over the whole fact table, the kind of query a nightly report or admin panel would run |
-| Q3 | Passenger-facing search ("what trains pass through my station this morning") — a selective, latency-sensitive lookup, the most common query shape in a real booking/enquiry system |
-| Q5 | Analytics ("longest halt per train") — a per-group ranking, the exact shape that tempts people into a correlated subquery in real reporting code |
-| Q6 | Catalog/filter query ("stations served by premium trains") — the classic `IN`/`EXISTS`/`JOIN` decision every backend developer eventually has to make |
-| Q7 | Any API endpoint returning train details — `SELECT *` is extremely common in real backend code and easy to overlook as a cost |
-| Q8 | Any paginated API/UI (train list, search results) — OFFSET pagination is the default nearly every ORM generates, and the one that quietly falls over at scale |
-| Q10 | A live dashboard reloading a station-summary aggregate on every page view — the case for a summary table over recomputing |
+| Q1 | Station dashboard / ops reporting ("how long do trains halt at each station") — heavy aggregation over the whole fact table, the kind of query a nightly report or admin panel would run |
+| Q2 | Passenger-facing search ("what trains pass through my station this morning") — a selective, latency-sensitive lookup, the most common query shape in a real booking/enquiry system |
+| Q3 | Analytics ("longest halt per train") — a per-group ranking, the exact shape that tempts people into a correlated subquery in real reporting code |
+| Q4 | Catalog/filter query ("stations served by premium trains") — the classic case where the real fix turns out to be a missing index on the join/filter column, not the `IN`/`JOIN` syntax itself |
+| Q5 | Any API endpoint returning train details — `SELECT *` is extremely common in real backend code and easy to overlook as a cost |
+| Q6 | Any paginated API/UI (train list, search results) — OFFSET pagination is the default nearly every ORM generates, and the one that quietly falls over at scale |
+| Q7 | A live dashboard reloading a station-summary aggregate on every page view — the case for a summary table over recomputing |
 
 The two intentionally excluded from the list are: (a) point lookups by
 primary key, which are already fast without any of this and wouldn't
@@ -203,7 +203,7 @@ Being direct about the limits of a single-connection, read-optimized
 benchmark, since a real railway booking/enquiry system's workload
 would stress things this project never touches:
 
-- **Every benchmark here is read-only, single-connection.** All 10
+- **Every benchmark here is read-only, single-connection.** All
   timings are one client, one query at a time, on an otherwise idle
   server. A real system would have concurrent readers *and* writers
   hitting `schedules` simultaneously — row-lock contention, gap locks
@@ -211,8 +211,8 @@ would stress things this project never touches:
   this repo. The reported numbers are best-case latency, not
   throughput under load.
 - **Every index added has a write-side cost this project never
-  measures.** By the end of the 10 case studies, `schedules` carries
-  4 secondary indexes and `trains` carries 2 — each one is extra work
+  measures.** By the end of the 7 case studies, `schedules` carries
+  3 secondary indexes and `trains` carries 2 — each one is extra work
   on every `INSERT`/`UPDATE`/`DELETE` (index maintenance, extra
   B-tree pages, more WAL/redo log volume) and extra disk space. For a
   fact table that's genuinely write-heavy in production (railways
@@ -222,12 +222,12 @@ would stress things this project never touches:
   now, not a benchmarked one).
 - **The write-path benchmark (bulk vs row-by-row insert) is isolated,
   not concurrent** — it measures one client loading 5,000 rows against
-  an unlocked table, not insert throughput while the 10 read queries
+  an unlocked table, not insert throughput while the read queries
   above are also running against the same rows.
 - **No connection pooling, replica reads, or caching layer** are
   modeled. A production system would likely put a cache (Redis) or a
-  read replica in front of the Q2/Q10-style dashboard queries
-  rather than relying solely on the summary-table trick shown in Q10.
+  read replica in front of the Q1/Q7-style dashboard queries
+  rather than relying solely on the summary-table trick shown in Q7.
 
 The honest scope of this project is: *diagnosing and fixing single-query
 latency on a realistic schema*, not capacity planning or
@@ -253,22 +253,22 @@ below is generated by `scripts/make_chart.py`.
 
 | # | Query | Technique | Before | After | Speedup |
 |---|-------|-----------|-------:|------:|--------:|
-| 2 | Average halt time per station | Covering index `(station_code, station_name, arrival, departure)` | 2937 ms | 969 ms | 3.0x |
-| 3 | Trains through a station in a time window | Composite index `(station_code, arrival)` | 5.8 ms | 5.4 ms | 1.1x |
-| 5 | Longest-halting station per train | Correlated subquery → `RANK() OVER` window function | 587 ms | 9.1 ms | **64x** |
-| 6 | Stations served by a Rajdhani/Duronto train | `IN` (uncorrelated subquery) → indexed `JOIN` | 3169 ms | 2273 ms | 1.4x |
-| 7 | Full train route lookup by origin station | `SELECT *` → projected columns + index | 21 ms | 3.2 ms | 6.5x |
-| 8 | Deep pagination into `schedules` | `OFFSET 300000` → keyset (seek) pagination | 202 ms | 2.9 ms | **70x** |
-| 10 | Station traffic dashboard aggregation | Materialized-view-style summary table | 4124 ms | 275 ms | **15x** |
+| 1 | Average halt time per station | Covering index `(station_code, station_name, arrival, departure)` | 2341 ms | 983 ms | 2.4x |
+| 2 | Trains through a station in a time window | Composite index `(station_code, arrival)` | 4.9 ms | 4.4 ms | 1.1x |
+| 3 | Longest-halting station per train | Correlated subquery → `RANK() OVER` window function | 600 ms | 3.3 ms | **183x** |
+| 4 | Stations served by a Rajdhani/Duronto train | Index on `schedules.train_number` + `JOIN` rewrite | 853 ms | 189 ms | 4.5x |
+| 5 | Full train route lookup by origin station | `SELECT *` → projected columns + index | 31 ms | 6.9 ms | 4.4x |
+| 6 | Deep pagination into `schedules` | `OFFSET 300000` → keyset (seek) pagination | 268 ms | 2.3 ms | **116x** |
+| 7 | Station traffic dashboard aggregation | Materialized-view-style summary table | 3857 ms | 225 ms | **17x** |
 
-### Proof, not just a claim — Q8's actual EXPLAIN ANALYZE
+### Proof, not just a claim — Q6's actual EXPLAIN ANALYZE
 
 <details>
 <summary><b>Before</b> — OFFSET 300000 (click to expand)</summary>
 
 ```
--> Limit/Offset: 20/300000 row(s)  (cost=27844 rows=20) (actual time=223..223 rows=20 loops=1)
-    -> Index scan on schedules using PRIMARY  (cost=27844 rows=300020) (actual time=0.0688..202 rows=300020 loops=1)
+-> Limit/Offset: 20/300000 row(s)  (cost=23021 rows=20) (actual time=314..314 rows=20 loops=1)
+    -> Index scan on schedules using PRIMARY  (cost=23021 rows=300020) (actual time=0.0911..286 rows=300020 loops=1)
 ```
 
 MySQL still has to walk **300,020 rows** through the primary key index
@@ -280,14 +280,14 @@ before it can throw away the first 300,000 and return the last 20.
 <summary><b>After</b> — keyset (seek) pagination (click to expand)</summary>
 
 ```
--> Limit: 20 row(s)  (cost=33553 rows=20) (actual time=0.0155..0.0334 rows=20 loops=1)
-    -> Filter: (schedules.id > 300000)  (cost=33553 rows=167463) (actual time=0.0134..0.0275 rows=20 loops=1)
-        -> Index range scan on schedules using PRIMARY over (300000 < id)  (cost=33553 rows=167463) (actual time=0.0134..0.0275 rows=20 loops=1)
+-> Limit: 20 row(s)  (cost=42878 rows=20) (actual time=0.0275..0.0512 rows=20 loops=1)
+    -> Filter: (schedules.id > 300000)  (cost=42878 rows=212829) (actual time=0.0266..0.0482 rows=20 loops=1)
+        -> Index range scan on schedules using PRIMARY over (300000 < id)  (cost=42878 rows=212829) (actual time=0.0248..0.044 rows=20 loops=1)
 ```
 
 Same index, same table — but `WHERE id > 300000 LIMIT 20` seeks
 directly to the right spot instead of scanning past everything before
-it: 202 ms → 0.03 ms of actual scan time for the 20 rows returned.
+it: 286 ms → 0.05 ms of actual scan time for the 20 rows returned.
 
 </details>
 
@@ -315,7 +315,7 @@ per-row commit cost; and a true bulk insert additionally collapses
 which is why `sql/load.sql` uses `LOAD DATA INFILE` rather than
 row-by-row inserts for the original 417K-row load.
 
-## Insights & Chokepoint Analysis
+## Insights & Network Analysis
 
 Beyond optimizing queries, the same dataset was mined for a few honest,
 data-backed findings about the network itself (`scripts/insights.py`,
@@ -364,18 +364,63 @@ bottleneck for its whole zone:
 ![Zone concentration](charts/zone_concentration.png)
 
 The honest finding here is a **non-finding**: the highest concentration
-across all 15 zones checked is only ~1.6% (Majorda in the KR zone).
+across all 15 zones checked is only ~1.6% (Suravali in the KR zone).
 No zone in this dataset has a single station carrying a disproportionate
 share of its traffic — the network is structurally well-distributed by
 this measure, which is a real, if less dramatic, result worth reporting
 as-is rather than searching for a more dramatic number.
 
+### Busiest origin-destination corridors
+
+Which exact station pairs have the most distinct trains running
+directly between them — the routes with the most redundancy/competition,
+as opposed to routes served by only one or two trains:
+
+![Busiest corridors](charts/busiest_corridors.png)
+
+| Route | Trains |
+|---|---:|
+| Chennai Beach → Velachery | 70 |
+| Lingampalli → Kacheguda Falaknuma | 30 |
+| Chennai Beach → Tambaram | 29 |
+| Kacheguda Falaknuma → Lingampalli | 28 |
+| Hyderabad Deccan → Lingampalli | 26 |
+
+The top of this list is dominated by suburban EMU corridors (Chennai,
+Hyderabad), not the long-distance expresses that dominate the
+chokepoint/gateway lists above — a genuinely different slice of the
+network, and a sanity check that the query is measuring what it claims
+to (short, high-frequency commuter routes look different from
+long-haul trunk routes, as they should).
+
+### Gateway stations (cross-zone connectivity hubs)
+
+Different from the chokepoint metric above (which measures raw
+pass-through volume), this measures how many **distinct railway zones**
+have trains converging at a station — a proxy for structural
+importance to inter-zone travel specifically, not just general traffic:
+
+![Gateway stations](charts/gateway_stations.png)
+
+| Station | Code | Distinct zones | Distinct trains |
+|---|---|---:|---:|
+| Itarsi Jn | ET | 16 | 293 |
+| Bhopal Jn | BPL | 16 | 233 |
+| Bhusaval Jn | BSL | 16 | 230 |
+| Diva | DIVA | 16 | 228 |
+| Bina Jn | BINA | 16 | 222 |
+
+Itarsi, Bhopal, and Bhusaval are well-known real junctions on India's
+north-south and east-west trunk routes, which is a reasonable
+plausibility check that this query is finding real structural hubs and
+not an artifact of the data.
+
 ## Frontend Dashboard
 
 A Streamlit dashboard (`frontend/app.py`) turns the static results into
 something clickable: benchmark results with sortable tables and
-charts, the chokepoint/insight analysis above, the write-path
-comparison, and a **live Query-3 lookup** (station + time window) that
+charts, the insight/network analysis above, the write-path
+comparison, and a **live Query-2 lookup** (station + time window) that
 runs directly against MySQL if a local connection is available —
 falling back gracefully to "no DB connection" if not.
 
@@ -400,8 +445,8 @@ python scripts/make_presentation.py
 ### Reproducing
 
 ```
-python scripts/run_all.py            # runs all 10 case studies, writes queries/, plans/, benchmark/results.json
-python scripts/insights.py           # runs the chokepoint/insight queries, writes benchmark/insights.json
+python scripts/run_all.py            # runs all 7 case studies, writes queries/, plans/, benchmark/results.json
+python scripts/insights.py           # runs the network/insight queries, writes benchmark/insights.json
 python scripts/make_chart.py         # regenerates the benchmark charts
 python scripts/make_insight_charts.py  # regenerates the insight charts
 python scripts/write_path_bench.py

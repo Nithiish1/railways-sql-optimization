@@ -57,4 +57,35 @@ plt.tight_layout()
 plt.savefig(os.path.join(CHARTS, "zone_concentration.png"), dpi=150)
 plt.close(fig)
 
+# ---------------------------------------------------------------- Busiest corridors
+rows = insights["busiest_corridors"][:12]
+labels = [f"{r['from_station_name'][:16]} -> {r['to_station_name'][:16]}" for r in rows][::-1]
+values = [r["train_count"] for r in rows][::-1]
+
+fig, ax = plt.subplots(figsize=(9, 6.5))
+bars = ax.barh(labels, values, color="#2980b9")
+ax.set_xlabel("Distinct trains running this exact origin -> destination corridor")
+ax.set_title("Busiest Origin-Destination Corridors")
+for bar, v in zip(bars, values):
+    ax.annotate(str(v), (bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
+plt.tight_layout()
+plt.savefig(os.path.join(CHARTS, "busiest_corridors.png"), dpi=150)
+plt.close(fig)
+
+# ---------------------------------------------------------------- Gateway stations
+rows = insights["gateway_stations"][:12]
+labels = [f"{r['station_name'][:18]}\n({r['station_code']})" for r in rows][::-1]
+values = [r["distinct_zones"] for r in rows][::-1]
+trains = [r["distinct_trains"] for r in rows][::-1]
+
+fig, ax = plt.subplots(figsize=(9, 6.5))
+bars = ax.barh(labels, values, color="#d35400")
+ax.set_xlabel("Distinct railway zones with trains converging at this station")
+ax.set_title("Gateway Stations — Cross-Zone Connectivity Hubs")
+for bar, v, t in zip(bars, values, trains):
+    ax.annotate(f"{v} zones / {t} trains", (bar.get_width() + 0.15, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
+plt.tight_layout()
+plt.savefig(os.path.join(CHARTS, "gateway_stations.png"), dpi=150)
+plt.close(fig)
+
 print("Insight charts written to", CHARTS)

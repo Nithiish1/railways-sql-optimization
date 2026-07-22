@@ -1,4 +1,5 @@
-SELECT DISTINCT sch.station_code, sch.station_name
-        FROM schedules sch
-        JOIN trains t ON t.train_number = sch.train_number
-        WHERE t.train_type IN ('Raj', 'Drnt');
+SELECT id, train_number, station_code, arrival
+        FROM schedules
+        WHERE id > 300000
+        ORDER BY id
+        LIMIT 20;
