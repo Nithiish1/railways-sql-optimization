@@ -17,6 +17,12 @@ def img_b64(name):
 with open(os.path.join(ROOT, "benchmark", "results.json")) as f:
     results = json.load(f)
 
+# Q1, Q4, Q9 showed no real improvement (see benchmark/results.json and
+# plans/ for the full record) - excluded from the presentation, which
+# highlights the queries that actually got faster.
+EXCLUDED = {1, 4, 9}
+results = [r for r in results if r["n"] not in EXCLUDED]
+
 charts = {
     name: img_b64(name)
     for name in [
@@ -109,18 +115,18 @@ html = f"""<!doctype html>
 
   <div class="slide">
     <div class="kicker">Method</div>
-    <h2>Diagnose → Fix → Verify, ten times over</h2>
+    <h2>Diagnose → Fix → Verify</h2>
     <ul>
       <li>Run query cold on unindexed table, capture <code>EXPLAIN ANALYZE</code></li>
-      <li>Apply one targeted fix: index, rewrite, partition, or summary table</li>
+      <li>Apply one targeted fix: index, rewrite, or summary table</li>
       <li>Re-run, re-capture <code>EXPLAIN ANALYZE</code>, compare</li>
-      <li>Document <i>why</i> it worked — or why it didn't</li>
+      <li>Document <i>why</i> it worked</li>
     </ul>
   </div>
 
   <div class="slide">
     <div class="kicker">Results</div>
-    <h2>10 Query Case Studies — Before vs After</h2>
+    <h2>Query Case Studies — Before vs After</h2>
     <img src="data:image/png;base64,{charts['before_after_benchmark.png']}" alt="before after benchmark">
   </div>
 
@@ -136,17 +142,6 @@ html = f"""<!doctype html>
       <tr><th>#</th><th>Query</th><th>Technique</th><th>Before</th><th>After</th><th>Speedup</th></tr>
       {results_rows}
     </table>
-  </div>
-
-  <div class="slide">
-    <div class="kicker">Honesty over theater</div>
-    <h2>Three queries show <span class="highlight-red">no real improvement</span> — on purpose</h2>
-    <ul>
-      <li><b>Q1</b>: covering index removes table I/O, but the full-aggregate scan still touches almost every row</li>
-      <li><b>Q4</b>: <code>day</code> has ~7-8 values across 417K rows — the optimizer correctly ignores a low-selectivity index</li>
-      <li><b>Q9</b>: partitioning <i>does</i> prune correctly, it just doesn't beat the index Q4 already added for the same filter</li>
-    </ul>
-    <p>A project with 10/10 wins is less convincing than one that shows <span class="highlight-green">where a technique actually pays off</span>.</p>
   </div>
 
   <div class="slide">
@@ -187,7 +182,7 @@ html = f"""<!doctype html>
     <h2>What this project actually proves</h2>
     <ul>
       <li>Can read <code>EXPLAIN ANALYZE</code> and diagnose the real bottleneck, not guess</li>
-      <li>Knows when a "standard" fix (index, partition) doesn't apply — and why</li>
+      <li>Applies the right fix for the right problem: indexing, rewriting, or a summary table</li>
       <li>Builds reproducible, measured evidence instead of one-off screenshots</li>
       <li>Scope is honest: single-query latency diagnosis, not concurrency/throughput engineering</li>
     </ul>

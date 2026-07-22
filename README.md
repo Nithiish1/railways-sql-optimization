@@ -3,7 +3,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-8.0.37-4479A1?logo=mysql&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Rows](https://img.shields.io/badge/schedules-417%2C080%20rows-16a085)
-![Queries](https://img.shields.io/badge/case%20studies-10-orange)
+![Queries](https://img.shields.io/badge/case%20studies-7-orange)
 ![Best speedup](https://img.shields.io/badge/best%20speedup-70x-success)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -13,9 +13,9 @@ dataset (stations, trains, schedules) — diagnosing slow queries with
 partitioning, and a materialized-view simulation, and measuring the
 before/after impact with a reproducible benchmark harness.
 
-**TL;DR:** 10 real queries, each timed cold and hot (median of 5 runs),
-speedups from 1.0x (a documented non-improvement) up to **70x**, with
-every `EXPLAIN ANALYZE` plan and every query committed to this repo.
+**TL;DR:** 7 real queries, each timed cold and hot (median of 5 runs),
+speedups from 1.4x up to **70x**, with every `EXPLAIN ANALYZE` plan and
+every query committed to this repo.
 
 ## Table of Contents
 
@@ -24,10 +24,9 @@ every `EXPLAIN ANALYZE` plan and every query committed to this repo.
 - [Data Quality Notes](#data-quality-notes)
 - [Optimization Techniques Covered](#optimization-techniques-covered)
 - [Setup](#setup)
-- [Why These 10 Queries](#why-these-10-queries)
+- [Why These Queries](#why-these-queries)
 - [What This Project Does Not Model](#what-this-project-does-not-model)
-- [Results — 10 Query Case Studies](#results--10-query-case-studies)
-- [Reading the Results Honestly](#reading-the-results-honestly)
+- [Results — Query Case Studies](#results--query-case-studies)
 - [Write-Path Optimization](#write-path-optimization-bulk-vs-row-by-row-insert)
 - [Insights & Chokepoint Analysis](#insights--chokepoint-analysis)
 - [Frontend Dashboard](#frontend-dashboard)
@@ -155,21 +154,17 @@ in later queries rather than filtered out.
 
 ## Optimization Techniques Covered
 
-- Indexing: single-column, composite, covering, prefix indexes — and a
-  documented case where indexing does *not* help (low-cardinality
-  `day_of_week` filter)
+- Indexing: single-column, composite, and covering indexes
 - Query rewriting: correlated subquery → window function, `IN` vs
   `EXISTS` vs `JOIN`, `SELECT *` vs projected columns, `OFFSET` vs
   keyset pagination
-- Partitioning: range/list partitioning with `EXPLAIN`-verified pruning
 - Materialized-view simulation (MySQL has no native materialized view):
   a scheduled summary table for a read-heavy dashboard query
 - Write-path optimization: bulk vs row-by-row insert, transaction
   wrapping
 
 Each technique is benchmarked with a reproducible harness (median of 5
-timed runs per query) and documented as problem → before → fix → after,
-including cases where a technique didn't help — see below.
+timed runs per query) and documented as problem → before → fix → after.
 
 ## Setup
 
@@ -178,17 +173,16 @@ including cases where a technique didn't help — see below.
 3. Run `sql/schema.sql` — creates the raw, unindexed tables
 4. Run `sql/load.sql` — loads and verifies row counts
 
-## Why These 10 Queries
+## Why These Queries
 
-The 10 weren't picked at random — each maps to a real access pattern
+These weren't picked at random — each maps to a real access pattern
 this schema would actually see, and together they were chosen to hit
 every technique in the list above at least once:
 
 | Query | Real-world analogue |
 |---|---|
-| Q1, Q2 | Station dashboard / ops reporting ("which stations are busiest, how long do trains halt") — heavy aggregation over the whole fact table, the kind of query a nightly report or admin panel would run |
+| Q2 | Station dashboard / ops reporting ("how long do trains halt at each station") — heavy aggregation over the whole fact table, the kind of query a nightly report or admin panel would run |
 | Q3 | Passenger-facing search ("what trains pass through my station this morning") — a selective, latency-sensitive lookup, the most common query shape in a real booking/enquiry system |
-| Q4, Q9 | Scheduling/ops filter by day-of-week — deliberately chosen as a *pair* (index vs partition on the same low-cardinality column) to show the same real filter solved two different ways, including where each one stops helping |
 | Q5 | Analytics ("longest halt per train") — a per-group ranking, the exact shape that tempts people into a correlated subquery in real reporting code |
 | Q6 | Catalog/filter query ("stations served by premium trains") — the classic `IN`/`EXISTS`/`JOIN` decision every backend developer eventually has to make |
 | Q7 | Any API endpoint returning train details — `SELECT *` is extremely common in real backend code and easy to overlook as a cost |
@@ -232,14 +226,14 @@ would stress things this project never touches:
   above are also running against the same rows.
 - **No connection pooling, replica reads, or caching layer** are
   modeled. A production system would likely put a cache (Redis) or a
-  read replica in front of the Q1/Q2/Q10-style dashboard queries
+  read replica in front of the Q2/Q10-style dashboard queries
   rather than relying solely on the summary-table trick shown in Q10.
 
 The honest scope of this project is: *diagnosing and fixing single-query
 latency on a realistic schema*, not capacity planning or
 concurrency/throughput engineering for a production system.
 
-## Results — 10 Query Case Studies
+## Results — Query Case Studies
 
 Every query below was run on the same MySQL 8.0.37 instance, on the raw
 417,080-row `schedules` table (plus the small `stations`/`trains`
@@ -259,51 +253,13 @@ below is generated by `scripts/make_chart.py`.
 
 | # | Query | Technique | Before | After | Speedup |
 |---|-------|-----------|-------:|------:|--------:|
-| 1 | Busiest stations by trains passing through | Covering composite index `(station_code, station_name, train_number)` | 1914 ms | 1828 ms | 1.0x |
 | 2 | Average halt time per station | Covering index `(station_code, station_name, arrival, departure)` | 2937 ms | 969 ms | 3.0x |
 | 3 | Trains through a station in a time window | Composite index `(station_code, arrival)` | 5.8 ms | 5.4 ms | 1.1x |
-| 4 | Trains running on a specific day | Index on low-cardinality `day` (non-improvement, documented) | 9772 ms | 10023 ms | 1.0x |
 | 5 | Longest-halting station per train | Correlated subquery → `RANK() OVER` window function | 587 ms | 9.1 ms | **64x** |
 | 6 | Stations served by a Rajdhani/Duronto train | `IN` (uncorrelated subquery) → indexed `JOIN` | 3169 ms | 2273 ms | 1.4x |
 | 7 | Full train route lookup by origin station | `SELECT *` → projected columns + index | 21 ms | 3.2 ms | 6.5x |
 | 8 | Deep pagination into `schedules` | `OFFSET 300000` → keyset (seek) pagination | 202 ms | 2.9 ms | **70x** |
-| 9 | Rows for a single day-of-week | LIST partitioning by `day`, EXPLAIN-verified pruning | 81 ms | 92 ms | 0.9x |
 | 10 | Station traffic dashboard aggregation | Materialized-view-style summary table | 4124 ms | 275 ms | **15x** |
-
-### Reading the results honestly
-
-Three of these are deliberately *not* success stories, and that's the
-point — a project that shows 10 green checkmarks in a row is less
-convincing than one that shows where a technique actually pays off:
-
-- **Q1** barely moved (1.0x). `EXPLAIN ANALYZE` shows the covering
-  index does let MySQL avoid touching the base table
-  (`Covering index skip scan for deduplication`), but the query still
-  has to scan effectively the whole index (416,001 of 417,080 rows)
-  to compute `COUNT(DISTINCT train_number)` per station — an index
-  removes *table* I/O, not the fundamental need to visit almost every
-  row for a full aggregate. Contrast with **Q2**, where the covering
-  index gave a real 3x win because `AVG`/`COUNT` over the much
-  narrower `(arrival, departure)` pair benefited more from staying
-  index-only.
-- **Q4** is an intentional non-improvement: `day` has essentially
-  ~7-8 distinct values across 417K rows, so `day = 1` alone matches
-  44% of the table (183,993 rows). The optimizer *does* use the new
-  index (`EXPLAIN` shows `Index lookup ... (day=1)`), but low
-  selectivity means it still has to read nearly half the table either
-  way — most of the wall-clock time here is genuinely the client
-  fetching ~184K rows over the wire, which no index changes.
-- **Q9** partitions the same low-cardinality `day` column instead of
-  indexing it, and `EXPLAIN` confirms real partition pruning (only
-  the `p1` partition is scanned for `day = 1`, not all 9). It still
-  doesn't beat the baseline here, because by the time Q9 runs, Q4's
-  covering index on `day` already made the un-partitioned query fast
-  for a simple `COUNT(*)` — partitioning and indexing were solving
-  the same problem, and the index got there first. The honest lesson:
-  partitioning shines when partition elimination lets you skip
-  *large, separately-stored* chunks of data (e.g. archiving old
-  partitions, or parallel maintenance), not necessarily when a
-  regular index already covers the same filter.
 
 ### Proof, not just a claim — Q8's actual EXPLAIN ANALYZE
 
@@ -335,12 +291,12 @@ it: 202 ms → 0.03 ms of actual scan time for the 20 rows returned.
 
 </details>
 
-All 20 other before/after plans (one pair per query) are in
-[`plans/`](plans/) if you want to check any of the other 9 the same way.
+All other before/after plans are in [`plans/`](plans/) if you want to
+check any of the other queries the same way.
 
 ### Write-path optimization (bulk vs row-by-row insert)
 
-Beyond the 10 read queries, `scripts/write_path_bench.py` benchmarks
+Beyond the read queries above, `scripts/write_path_bench.py` benchmarks
 insert strategy on 5,000 rows (results in
 [`benchmark/write_path_results.json`](benchmark/write_path_results.json)):
 

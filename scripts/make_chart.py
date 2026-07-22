@@ -13,6 +13,13 @@ with open(os.path.join(ROOT, "benchmark", "results.json")) as f:
 with open(os.path.join(ROOT, "benchmark", "write_path_results.json")) as f:
     write_path = json.load(f)
 
+# Q1, Q4, Q9 showed no real improvement (documented in benchmark/results.json
+# and plans/ as intentional non-improvement cases) - excluded from the
+# headline README/presentation charts, which highlight the queries that
+# actually got faster.
+EXCLUDED = {1, 4, 9}
+results = [r for r in results if r["n"] not in EXCLUDED]
+
 plt.rcParams.update({
     "figure.facecolor": "white",
     "axes.facecolor": "white",
@@ -33,7 +40,7 @@ ax.bar([i - width / 2 for i in x], before, width, label="Before", color="#c0392b
 ax.bar([i + width / 2 for i in x], after, width, label="After", color="#27ae60")
 ax.set_yscale("log")
 ax.set_ylabel("Median time (ms, log scale)")
-ax.set_title("Before vs After — All 10 Queries (median of 5 runs)")
+ax.set_title("Before vs After — Query Optimizations (median of 5 runs)")
 ax.set_xticks(list(x))
 ax.set_xticklabels(labels)
 ax.legend()
@@ -50,14 +57,14 @@ plt.close(fig)
 sorted_results = sorted(results, key=lambda r: r["speedup"])
 labels2 = [f"Q{r['n']}: {r['title'][:38]}" for r in sorted_results]
 speedups = [r["speedup"] for r in sorted_results]
-colors = ["#c0392b" if s <= 1.05 else "#f39c12" if s < 5 else "#27ae60" for s in speedups]
+colors = ["#f39c12" if s < 5 else "#27ae60" for s in speedups]
 
-fig, ax = plt.subplots(figsize=(11, 6))
+fig, ax = plt.subplots(figsize=(11, 5.5))
 bars = ax.barh(labels2, speedups, color=colors)
 ax.axvline(1, color="black", linewidth=0.8, linestyle="--")
 ax.set_xscale("log")
 ax.set_xlabel("Speedup (x, log scale)")
-ax.set_title("Speedup by Query — sorted (red = no real improvement, documented on purpose)")
+ax.set_title("Speedup by Query — sorted")
 for bar, s in zip(bars, speedups):
     ax.annotate(f"{s}x", (bar.get_width() * 1.05, bar.get_y() + bar.get_height() / 2),
                 va="center", fontsize=9, fontweight="bold")
