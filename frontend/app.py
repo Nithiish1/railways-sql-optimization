@@ -128,7 +128,19 @@ with tab4:
             rows = cur.fetchall()
             conn.close()
             if rows:
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                df = pd.DataFrame(rows)
+
+                def fmt_time(v):
+                    if v is None:
+                        return None
+                    total_seconds = int(v.total_seconds())
+                    h, rem = divmod(total_seconds, 3600)
+                    m, s = divmod(rem, 60)
+                    return f"{h:02d}:{m:02d}:{s:02d}"
+
+                df["arrival"] = df["arrival"].apply(fmt_time)
+                df["departure"] = df["departure"].apply(fmt_time)
+                st.dataframe(df, use_container_width=True, hide_index=True)
             else:
                 st.info("No trains found for that station/time window.")
         except Exception as e:
