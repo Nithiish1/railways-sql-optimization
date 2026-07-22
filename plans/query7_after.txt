@@ -1,0 +1,1 @@
+-> Index lookup on trains using idx_trains_from (from_station_code='NDLS')  (cost=44.3 rows=80) (actual time=0.142..0.292 rows=80 loops=1)

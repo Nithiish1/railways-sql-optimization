@@ -1,0 +1,8 @@
+{
+  "n_rows": 5000,
+  "row_by_row_autocommit_ms": 13648.42,
+  "row_by_row_single_txn_ms": 3718.89,
+  "bulk_executemany_ms": 150.29,
+  "speedup_txn_vs_autocommit": 3.7,
+  "speedup_bulk_vs_autocommit": 90.8
+}

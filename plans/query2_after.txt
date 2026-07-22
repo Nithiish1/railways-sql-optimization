@@ -1,0 +1,6 @@
+-> Limit: 20 row(s)  (actual time=1308..1308 rows=20 loops=1)
+    -> Sort: avg_halt_seconds DESC, limit input to 20 row(s) per chunk  (actual time=1308..1308 rows=20 loops=1)
+        -> Stream results  (cost=61703 rows=7809) (actual time=0.099..1298 rows=7499 loops=1)
+            -> Group aggregate: avg(timestampdiff(SECOND,schedules.arrival,schedules.departure)), count(0)  (cost=61703 rows=7809) (actual time=0.0925..1271 rows=7499 loops=1)
+                -> Filter: ((schedules.arrival is not null) and (schedules.departure is not null))  (cost=34574 rows=271290) (actual time=0.0538..660 rows=384107 loops=1)
+                    -> Covering index scan on schedules using idx_sched_halt  (cost=34574 rows=334926) (actual time=0.0526..515 rows=417080 loops=1)

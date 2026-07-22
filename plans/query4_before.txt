@@ -1,0 +1,2 @@
+-> Filter: (schedules.`day` = 1)  (cost=34574 rows=33493) (actual time=0.0846..422 rows=183993 loops=1)
+    -> Table scan on schedules  (cost=34574 rows=334926) (actual time=0.0824..365 rows=417080 loops=1)

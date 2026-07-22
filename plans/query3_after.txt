@@ -1,0 +1,1 @@
+-> Index range scan on schedules using idx_sched_station_arrival over (station_code = 'CNB' AND '06:00:00' <= arrival <= '10:00:00'), with index condition: ((schedules.station_code = 'CNB') and (schedules.arrival between '06:00:00' and '10:00:00'))  (cost=17.8 rows=39) (actual time=0.134..0.697 rows=39 loops=1)

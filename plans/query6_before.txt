@@ -1,0 +1,8 @@
+-> Table scan on <temporary>  (cost=226574..227413 rows=66985) (actual time=3641..3642 rows=2859 loops=1)
+    -> Temporary table with deduplication  (cost=226574..226574 rows=66985) (actual time=3641..3641 rows=2859 loops=1)
+        -> Nested loop inner join  (cost=219875 rows=66985) (actual time=0.275..3593 rows=19749 loops=1)
+            -> Filter: (schedules.train_number is not null)  (cost=34574 rows=334926) (actual time=0.0828..562 rows=417080 loops=1)
+                -> Covering index scan on schedules using idx_sched_station_train  (cost=34574 rows=334926) (actual time=0.0804..451 rows=417080 loops=1)
+            -> Limit: 1 row(s)  (cost=0.453 rows=0.2) (actual time=0.00693..0.00694 rows=0.0474 loops=417080)
+                -> Filter: (trains.train_type in ('Raj','Drnt'))  (cost=0.453 rows=0.2) (actual time=0.0066..0.0066 rows=0.0474 loops=417080)
+                    -> Single-row index lookup on trains using PRIMARY (train_number=schedules.train_number)  (cost=0.453 rows=1) (actual time=0.0058..0.00587 rows=1 loops=417080)

@@ -1,0 +1,2 @@
+-> Aggregate: count(0)  (cost=33677 rows=1) (actual time=135..135 rows=1 loops=1)
+    -> Covering index lookup on schedules using idx_sched_day (day=1)  (cost=16931 rows=167463) (actual time=0.0293..114 rows=183993 loops=1)
