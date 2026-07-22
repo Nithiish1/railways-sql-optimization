@@ -1,0 +1,380 @@
+{
+  "chokepoint_stations": [
+    {
+      "station_code": "SBB",
+      "station_name": "SAHIBABAD",
+      "passthrough_trains": 285
+    },
+    {
+      "station_code": "GZB",
+      "station_name": "GHAZIABAD",
+      "passthrough_trains": 283
+    },
+    {
+      "station_code": "ET",
+      "station_name": "ITARSI JN",
+      "passthrough_trains": 279
+    },
+    {
+      "station_code": "KOPR",
+      "station_name": "KOPAR ROAD",
+      "passthrough_trains": 262
+    },
+    {
+      "station_code": "CNB",
+      "station_name": "KANPUR CENTRAL",
+      "passthrough_trains": 252
+    },
+    {
+      "station_code": "THK",
+      "station_name": "THAKRULI",
+      "passthrough_trains": 241
+    },
+    {
+      "station_code": "KYN",
+      "station_name": "KALYAN JN",
+      "passthrough_trains": 241
+    },
+    {
+      "station_code": "DI",
+      "station_name": "DOMBIVILI",
+      "passthrough_trains": 241
+    },
+    {
+      "station_code": "BRC",
+      "station_name": "VADODARA JN",
+      "passthrough_trains": 240
+    },
+    {
+      "station_code": "TIT",
+      "station_name": "TALIT",
+      "passthrough_trains": 232
+    },
+    {
+      "station_code": "KAN",
+      "station_name": "KHANA JN",
+      "passthrough_trains": 232
+    },
+    {
+      "station_code": "BZA",
+      "station_name": "VIJAYAWADA JN",
+      "passthrough_trains": 230
+    },
+    {
+      "station_code": "UDN",
+      "station_name": "UDHNA JN",
+      "passthrough_trains": 229
+    },
+    {
+      "station_code": "MGS",
+      "station_name": "MUGHAL SARAI JN",
+      "passthrough_trains": 229
+    },
+    {
+      "station_code": "DIVA",
+      "station_name": "DIVA",
+      "passthrough_trains": 226
+    }
+  ],
+  "unstable_schedule_trains": [
+    {
+      "train_number": "43001",
+      "train_name": "Chennai Central Avadi EMU",
+      "stops": 11,
+      "halt_stddev_seconds": 24407.0,
+      "halt_avg_seconds": "7778.2"
+    },
+    {
+      "train_number": "40523",
+      "train_name": "Chennai Beach Chengulpet EMU",
+      "stops": 27,
+      "halt_stddev_seconds": 20726.7,
+      "halt_avg_seconds": "5920.0"
+    },
+    {
+      "train_number": "40051",
+      "train_name": "Chennai Beach TambaramEMU (12 car)",
+      "stops": 17,
+      "halt_stddev_seconds": 20275.1,
+      "halt_avg_seconds": "5269.4"
+    },
+    {
+      "train_number": "51262",
+      "train_name": "Wardha Amravati Passenger",
+      "stops": 10,
+      "halt_stddev_seconds": 2668.1,
+      "halt_avg_seconds": "996.0"
+    },
+    {
+      "train_number": "15308-Slip",
+      "train_name": "Nainital Express Slip",
+      "stops": 32,
+      "halt_stddev_seconds": 2549.4,
+      "halt_avg_seconds": "521.3"
+    },
+    {
+      "train_number": "54321",
+      "train_name": "Balamau Sitapur Cantt Passenger",
+      "stops": 10,
+      "halt_stddev_seconds": 2466.0,
+      "halt_avg_seconds": "882.0"
+    },
+    {
+      "train_number": "51158",
+      "train_name": "Itarsi Bhusaval Passenger",
+      "stops": 37,
+      "halt_stddev_seconds": 2277.6,
+      "halt_avg_seconds": "434.6"
+    },
+    {
+      "train_number": "18235-Slip",
+      "train_name": "Bilaspur Express Passenger Slip",
+      "stops": 71,
+      "halt_stddev_seconds": 2255.7,
+      "halt_avg_seconds": "441.1"
+    },
+    {
+      "train_number": "28624",
+      "train_name": "Barkakana Rajendranagar Slip Express",
+      "stops": 48,
+      "halt_stddev_seconds": 2144.1,
+      "halt_avg_seconds": "382.5"
+    },
+    {
+      "train_number": "17226-Slip",
+      "train_name": "Amaravathi Express Slip",
+      "stops": 79,
+      "halt_stddev_seconds": 2044.7,
+      "halt_avg_seconds": "243.8"
+    },
+    {
+      "train_number": "51754",
+      "train_name": "Chirmiri Rewa Fast Passenger",
+      "stops": 38,
+      "halt_stddev_seconds": 2011.2,
+      "halt_avg_seconds": "461.1"
+    },
+    {
+      "train_number": "06228",
+      "train_name": "Shimoga Mysore Express",
+      "stops": 19,
+      "halt_stddev_seconds": 2002.6,
+      "halt_avg_seconds": "505.3"
+    },
+    {
+      "train_number": "56012",
+      "train_name": "Nandalur Arakkonam Passenger",
+      "stops": 19,
+      "halt_stddev_seconds": 1995.6,
+      "halt_avg_seconds": "533.7"
+    },
+    {
+      "train_number": "52228",
+      "train_name": "Tanakpur Aishbagh Express",
+      "stops": 32,
+      "halt_stddev_seconds": 1923.9,
+      "halt_avg_seconds": "408.8"
+    },
+    {
+      "train_number": "14265-Slip",
+      "train_name": "Varanasi-Ramnagar Express Slip",
+      "stops": 100,
+      "halt_stddev_seconds": 1907.9,
+      "halt_avg_seconds": "251.4"
+    }
+  ],
+  "zone_concentration": [
+    {
+      "zone": "KR",
+      "station_code": "MJO",
+      "station_name": "MAJORDA",
+      "stop_count": 15,
+      "zone_stop_count": 943,
+      "pct_of_zone": "1.6"
+    },
+    {
+      "zone": "NCR",
+      "station_code": "CNB",
+      "station_name": "KANPUR CENTRAL",
+      "stop_count": 57,
+      "zone_stop_count": 5191,
+      "pct_of_zone": "1.1"
+    },
+    {
+      "zone": "SCR",
+      "station_code": "BMT",
+      "station_name": "BEGAMPET",
+      "stop_count": 179,
+      "zone_stop_count": 26616,
+      "pct_of_zone": "0.7"
+    },
+    {
+      "zone": "SECR",
+      "station_code": "R",
+      "station_name": "RAIPUR JN",
+      "stop_count": 43,
+      "zone_stop_count": 6385,
+      "pct_of_zone": "0.7"
+    },
+    {
+      "zone": "WCR",
+      "station_code": "JBP",
+      "station_name": "JABALPUR",
+      "stop_count": 23,
+      "zone_stop_count": 3639,
+      "pct_of_zone": "0.6"
+    },
+    {
+      "zone": "ECR",
+      "station_code": "PNBE",
+      "station_name": "PATNA JN",
+      "stop_count": 83,
+      "zone_stop_count": 16410,
+      "pct_of_zone": "0.5"
+    },
+    {
+      "zone": "ER",
+      "station_code": "BWN",
+      "station_name": "BARDDHAMAN JN",
+      "stop_count": 181,
+      "zone_stop_count": 36105,
+      "pct_of_zone": "0.5"
+    },
+    {
+      "zone": "NWR",
+      "station_code": "JP",
+      "station_name": "JAIPUR",
+      "stop_count": 82,
+      "zone_stop_count": 16352,
+      "pct_of_zone": "0.5"
+    },
+    {
+      "zone": "SWR",
+      "station_code": "SBC",
+      "station_name": "BANGALORE CITY JN",
+      "stop_count": 108,
+      "zone_stop_count": 20879,
+      "pct_of_zone": "0.5"
+    },
+    {
+      "zone": "CR",
+      "station_code": "THK",
+      "station_name": "THAKRULI",
+      "stop_count": 129,
+      "zone_stop_count": 35015,
+      "pct_of_zone": "0.4"
+    },
+    {
+      "zone": "ECoR",
+      "station_code": "BBS",
+      "station_name": "BHUBANESWAR",
+      "stop_count": 67,
+      "zone_stop_count": 16756,
+      "pct_of_zone": "0.4"
+    },
+    {
+      "zone": "NER",
+      "station_code": "GKP",
+      "station_name": "GORAKHPUR JN",
+      "stop_count": 82,
+      "zone_stop_count": 21403,
+      "pct_of_zone": "0.4"
+    },
+    {
+      "zone": "SER",
+      "station_code": "KGP",
+      "station_name": "KHARAGPUR JN",
+      "stop_count": 108,
+      "zone_stop_count": 29089,
+      "pct_of_zone": "0.4"
+    },
+    {
+      "zone": "WR",
+      "station_code": "BRC",
+      "station_name": "VADODARA JN",
+      "stop_count": 145,
+      "zone_stop_count": 40624,
+      "pct_of_zone": "0.4"
+    },
+    {
+      "zone": "NFR",
+      "station_code": "NJP",
+      "station_name": "NEW JALPAIGURI",
+      "stop_count": 91,
+      "zone_stop_count": 30516,
+      "pct_of_zone": "0.3"
+    }
+  ],
+  "longest_routes": [
+    {
+      "train_number": "15905",
+      "train_name": "KANNIYAKUMARI - DIBRUGARH Vivek Exp",
+      "from_station_name": "KANYAKUMARI",
+      "to_station_name": "DIBRUGARH",
+      "distance": 4279
+    },
+    {
+      "train_number": "15906",
+      "train_name": "DIBRUGARH - KANNIYAKUMARI Vivek Exp",
+      "from_station_name": "DIBRUGARH",
+      "to_station_name": "KANYAKUMARI",
+      "distance": 4278
+    },
+    {
+      "train_number": "16317",
+      "train_name": "Himsagar Express",
+      "from_station_name": "KANYAKUMARI",
+      "to_station_name": "JAMMU TAWI",
+      "distance": 3715
+    },
+    {
+      "train_number": "16318",
+      "train_name": "Himsagar Express",
+      "from_station_name": "JAMMU TAWI",
+      "to_station_name": "KANYAKUMARI",
+      "distance": 3715
+    },
+    {
+      "train_number": "16688",
+      "train_name": "Navyug Express",
+      "from_station_name": "JAMMU TAWI",
+      "to_station_name": "MANGALORE CNTL",
+      "distance": 3609
+    },
+    {
+      "train_number": "16687",
+      "train_name": "Navyug Express",
+      "from_station_name": "MANGALORE CNTL",
+      "to_station_name": "JAMMU TAWI",
+      "distance": 3609
+    },
+    {
+      "train_number": "16688-Slip",
+      "train_name": "Navyug Express Slip",
+      "from_station_name": "JAMMU TAWI",
+      "to_station_name": "TIRUNELVELI",
+      "distance": 3601
+    },
+    {
+      "train_number": "12484",
+      "train_name": "AMRITSAR - KOCHUVELI SF Exp",
+      "from_station_name": "AMRITSAR JN",
+      "to_station_name": "KOCHUVELI",
+      "distance": 3597
+    },
+    {
+      "train_number": "12483",
+      "train_name": "KOCHUVELI - AMRITSAR SF Exp",
+      "from_station_name": "KOCHUVELI",
+      "to_station_name": "AMRITSAR JN",
+      "distance": 3597
+    },
+    {
+      "train_number": "15901",
+      "train_name": "BENGALURU - NEW TINSUKIA Weekly Exp",
+      "from_station_name": "BANGALORE CITY JN",
+      "to_station_name": "NEW TINSUKIA JN",
+      "distance": 3578
+    }
+  ]
+}

@@ -29,6 +29,9 @@ every `EXPLAIN ANALYZE` plan and every query committed to this repo.
 - [Results — 10 Query Case Studies](#results--10-query-case-studies)
 - [Reading the Results Honestly](#reading-the-results-honestly)
 - [Write-Path Optimization](#write-path-optimization-bulk-vs-row-by-row-insert)
+- [Insights & Chokepoint Analysis](#insights--chokepoint-analysis)
+- [Frontend Dashboard](#frontend-dashboard)
+- [Presentation](#presentation)
 - [Reproducing](#reproducing)
 
 ## Project Structure
@@ -39,11 +42,16 @@ railways-sql-optimization/
 ├── convert.py                  # GeoJSON -> flat CSV converter
 ├── queries/                    # query{1-10}_{before,after}.sql
 ├── plans/                      # EXPLAIN ANALYZE output, one file per query per state
-├── benchmark/                  # results.json, write_path_results.json
+├── benchmark/                  # results.json, write_path_results.json, insights.json
 ├── charts/                     # generated PNG charts (this README embeds them)
+├── frontend/app.py             # Streamlit dashboard (benchmarks, insights, live lookup)
+├── presentation/index.html     # self-contained slide-deck walkthrough
 └── scripts/
     ├── run_all.py               # orchestrates all 10 case studies end-to-end
-    ├── make_chart.py            # regenerates every chart from benchmark/results.json
+    ├── insights.py              # chokepoint/instability/zone-concentration queries
+    ├── make_chart.py            # regenerates benchmark charts
+    ├── make_insight_charts.py   # regenerates insight charts
+    ├── make_presentation.py     # regenerates presentation/index.html
     └── write_path_bench.py      # bulk vs row-by-row insert benchmark
 ```
 
@@ -351,10 +359,95 @@ per-row commit cost; and a true bulk insert additionally collapses
 which is why `sql/load.sql` uses `LOAD DATA INFILE` rather than
 row-by-row inserts for the original 417K-row load.
 
+## Insights & Chokepoint Analysis
+
+Beyond optimizing queries, the same dataset was mined for a few honest,
+data-backed findings about the network itself (`scripts/insights.py`,
+raw output in [`benchmark/insights.json`](benchmark/insights.json)).
+
+### Chokepoint stations (structural single points of failure)
+
+Stations ranked by how many *distinct trains merely pass through* them
+(i.e. the station is neither the train's origin nor its destination).
+A high count here means many journeys structurally depend on that one
+station being operational, even though it's not their starting or
+ending point:
+
+![Chokepoint stations](charts/chokepoint_stations.png)
+
+| Station | Code | Trains passing through |
+|---|---|---:|
+| Sahibabad | SBB | 285 |
+| Ghaziabad | GZB | 283 |
+| Itarsi Jn | ET | 279 |
+| Kopar Road | KOPR | 262 |
+| Kanpur Central | CNB | 252 |
+
+### Schedule instability (most inconsistent halt times)
+
+For each train, the standard deviation of its own halt time across its
+stops — a proxy for scheduling inconsistency (some stops padded
+heavily, others barely touched). Note: this required a **second, real
+data-quality fix** on top of the ones in the README's Data Quality
+Notes — a naive `TIMESTAMPDIFF(SECOND, arrival, departure)` produces
+large negative values for any stop where a train's halt straddles
+midnight (MySQL `TIME` has no date component, so `23:58 → 00:04` reads
+as *negative* six hours instead of positive six minutes). The query
+below corrects for that with `MOD(diff + 86400, 86400)` before
+aggregating — without it, the "top 5" list was dominated entirely by
+this artifact, not real instability:
+
+![Unstable trains](charts/unstable_trains.png)
+
+### Zone traffic concentration
+
+For each railway zone, what share of its total train-stops run through
+its single busiest station — a proxy for whether one station is a
+bottleneck for its whole zone:
+
+![Zone concentration](charts/zone_concentration.png)
+
+The honest finding here is a **non-finding**: the highest concentration
+across all 15 zones checked is only ~1.6% (Majorda in the KR zone).
+No zone in this dataset has a single station carrying a disproportionate
+share of its traffic — the network is structurally well-distributed by
+this measure, which is a real, if less dramatic, result worth reporting
+as-is rather than searching for a more dramatic number.
+
+## Frontend Dashboard
+
+A Streamlit dashboard (`frontend/app.py`) turns the static results into
+something clickable: benchmark results with sortable tables and
+charts, the chokepoint/insight analysis above, the write-path
+comparison, and a **live Query-3 lookup** (station + time window) that
+runs directly against MySQL if a local connection is available —
+falling back gracefully to "no DB connection" if not.
+
+```
+pip install -r frontend/requirements.txt
+streamlit run frontend/app.py
+```
+
+Tabs: **Benchmark Results** · **Chokepoint Insights** · **Write-Path** · **Live Lookup**
+
+## Presentation
+
+A self-contained, dependency-free slide deck (`presentation/index.html`)
+walks through the problem, method, results, and insights — open it
+directly in any browser (arrow keys or the Prev/Next buttons to
+navigate). Regenerate it any time with:
+
+```
+python scripts/make_presentation.py
+```
+
 ### Reproducing
 
 ```
-python scripts/run_all.py         # runs all 10 case studies, writes queries/, plans/, benchmark/results.json
-python scripts/make_chart.py      # regenerates charts/before_after_benchmark.png
+python scripts/run_all.py            # runs all 10 case studies, writes queries/, plans/, benchmark/results.json
+python scripts/insights.py           # runs the chokepoint/insight queries, writes benchmark/insights.json
+python scripts/make_chart.py         # regenerates the benchmark charts
+python scripts/make_insight_charts.py  # regenerates the insight charts
 python scripts/write_path_bench.py
+python scripts/make_presentation.py  # regenerates presentation/index.html
 ```
