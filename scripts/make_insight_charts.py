@@ -1,8 +1,7 @@
 import json
 import os
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+
+from chart_style import ACCENT, QUIET_MARK, chart_figure, rounded_hbars, save_chart
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHARTS = os.path.join(ROOT, "charts")
@@ -10,82 +9,77 @@ CHARTS = os.path.join(ROOT, "charts")
 with open(os.path.join(ROOT, "benchmark", "insights.json")) as f:
     insights = json.load(f)
 
-plt.rcParams.update({"figure.facecolor": "white", "axes.facecolor": "white", "font.size": 10})
+
+def station(row):
+    return f"{row['station_name'].title()}  ·  {row['station_code']}"
+
 
 # ---------------------------------------------------------------- Chokepoints
 rows = insights["chokepoint_stations"][:12]
-labels = [f"{r['station_name'][:18]}\n({r['station_code']})" for r in rows][::-1]
-values = [r["passthrough_trains"] for r in rows][::-1]
-
-fig, ax = plt.subplots(figsize=(9, 6.5))
-bars = ax.barh(labels, values, color="#c0392b")
-ax.set_xlabel("Distinct trains passing THROUGH this station (not origin/destination)")
-ax.set_title("Chokepoint Stations — Structural Single Points of Failure")
-for bar, v in zip(bars, values):
-    ax.annotate(str(v), (bar.get_width() + 3, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
-plt.tight_layout()
-plt.savefig(os.path.join(CHARTS, "chokepoint_stations.png"), dpi=150)
-plt.close(fig)
+fig, ax = chart_figure(
+    len(rows),
+    f"{rows[0]['station_name'].title()} and {rows[1]['station_name'].title()} carry the most through traffic",
+    "Distinct trains passing through a station that is neither their origin nor destination",
+)
+rounded_hbars(ax, [station(r) for r in rows], [r["passthrough_trains"] for r in rows])
+save_chart(fig, os.path.join(CHARTS, "chokepoint_stations.png"))
 
 # ---------------------------------------------------------------- Unstable trains
 rows = insights["unstable_schedule_trains"][:10]
-labels = [f"{r['train_name'][:28]}\n({r['train_number']})" for r in rows][::-1]
-values = [float(r["halt_stddev_seconds"]) / 60 for r in rows][::-1]
-
-fig, ax = plt.subplots(figsize=(9, 6))
-bars = ax.barh(labels, values, color="#8e44ad")
-ax.set_xlabel("Halt-time std. deviation across stops (minutes)")
-ax.set_title("Most Schedule-Inconsistent Trains (overnight-corrected)")
-for bar, v in zip(bars, values):
-    ax.annotate(f"{v:.0f}m", (bar.get_width() + 2, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
-plt.tight_layout()
-plt.savefig(os.path.join(CHARTS, "unstable_trains.png"), dpi=150)
-plt.close(fig)
+fig, ax = chart_figure(
+    len(rows),
+    "The trains with the least consistent halt times",
+    "Standard deviation of each train's halts across its own stops, in minutes",
+    label_in=3.3,
+)
+minutes = [float(r["halt_stddev_seconds"]) / 60 for r in rows]
+rounded_hbars(ax, [r["train_name"] for r in rows], minutes,
+              value_labels=[f"{m:.0f} min" for m in minutes])
+save_chart(fig, os.path.join(CHARTS, "unstable_trains.png"))
 
 # ---------------------------------------------------------------- Zone concentration
-rows = insights["zone_concentration"][:12]
-labels = [f"{r['zone']}: {r['station_name'][:16]}" for r in rows][::-1]
-values = [float(r["pct_of_zone"]) for r in rows][::-1]
-
-fig, ax = plt.subplots(figsize=(9, 6.5))
-bars = ax.barh(labels, values, color="#16a085")
-ax.set_xlabel("% of zone's total train-stops running through this one station")
-ax.set_title("Zone Traffic Concentration — Busiest Station per Zone")
-for bar, v in zip(bars, values):
-    ax.annotate(f"{v}%", (bar.get_width() + 0.03, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
-plt.tight_layout()
-plt.savefig(os.path.join(CHARTS, "zone_concentration.png"), dpi=150)
-plt.close(fig)
+rows = insights["zone_concentration"]
+values = [float(r["pct_of_zone"]) for r in rows]
+fig, ax = chart_figure(
+    len(rows),
+    f"No zone relies on one station for more than {max(values)}% of its stops",
+    "Share of each zone's train stops at its single busiest station",
+    footnote="Where stations tie as a zone's busiest, the first by station code is shown.",
+)
+rounded_hbars(
+    ax,
+    [f"{r['zone']}  ·  {r['station_name'].title()}" for r in rows],
+    values,
+    colors=[ACCENT if v == max(values) else QUIET_MARK for v in values],
+    value_labels=[f"{v}%" for v in values],
+)
+save_chart(fig, os.path.join(CHARTS, "zone_concentration.png"))
 
 # ---------------------------------------------------------------- Busiest corridors
 rows = insights["busiest_corridors"][:12]
-labels = [f"{r['from_station_name'][:16]} -> {r['to_station_name'][:16]}" for r in rows][::-1]
-values = [r["train_count"] for r in rows][::-1]
-
-fig, ax = plt.subplots(figsize=(9, 6.5))
-bars = ax.barh(labels, values, color="#2980b9")
-ax.set_xlabel("Distinct trains running this exact origin -> destination corridor")
-ax.set_title("Busiest Origin-Destination Corridors")
-for bar, v in zip(bars, values):
-    ax.annotate(str(v), (bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
-plt.tight_layout()
-plt.savefig(os.path.join(CHARTS, "busiest_corridors.png"), dpi=150)
-plt.close(fig)
+fig, ax = chart_figure(
+    len(rows),
+    f"{rows[0]['from_station_name'].title()} to {rows[0]['to_station_name'].title()} is the busiest corridor",
+    "Distinct trains running each exact origin-to-destination pair",
+    label_in=3.5,
+)
+rounded_hbars(
+    ax,
+    [f"{r['from_station_name'].title()} → {r['to_station_name'].title()}" for r in rows],
+    [r["train_count"] for r in rows],
+)
+save_chart(fig, os.path.join(CHARTS, "busiest_corridors.png"))
 
 # ---------------------------------------------------------------- Gateway stations
 rows = insights["gateway_stations"][:12]
-labels = [f"{r['station_name'][:18]}\n({r['station_code']})" for r in rows][::-1]
-values = [r["distinct_zones"] for r in rows][::-1]
-trains = [r["distinct_trains"] for r in rows][::-1]
-
-fig, ax = plt.subplots(figsize=(9, 6.5))
-bars = ax.barh(labels, values, color="#d35400")
-ax.set_xlabel("Distinct railway zones with trains converging at this station")
-ax.set_title("Gateway Stations — Cross-Zone Connectivity Hubs")
-for bar, v, t in zip(bars, values, trains):
-    ax.annotate(f"{v} zones / {t} trains", (bar.get_width() + 0.15, bar.get_y() + bar.get_height() / 2), va="center", fontsize=8)
-plt.tight_layout()
-plt.savefig(os.path.join(CHARTS, "gateway_stations.png"), dpi=150)
-plt.close(fig)
+zones = rows[0]["distinct_zones"]
+assert all(r["distinct_zones"] == zones for r in rows)
+fig, ax = chart_figure(
+    len(rows),
+    f"These stations connect trains from {zones} railway zones",
+    f"Every station here is served by {zones} zones, the most in the data, so they rank by distinct trains",
+)
+rounded_hbars(ax, [station(r) for r in rows], [r["distinct_trains"] for r in rows])
+save_chart(fig, os.path.join(CHARTS, "gateway_stations.png"))
 
 print("Insight charts written to", CHARTS)
