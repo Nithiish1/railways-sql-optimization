@@ -1,2 +1,2 @@
--> Filter: (trains.from_station_code = 'NDLS')  (cost=1291 rows=608) (actual time=0.319..34.9 rows=80 loops=1)
-    -> Table scan on trains  (cost=1291 rows=6078) (actual time=0.0759..31.2 rows=5208 loops=1)
+-> Filter: (trains.from_station_code = 'NDLS')  (cost=1291 rows=608) (actual time=0.125..28.9 rows=80 loops=1)
+    -> Table scan on trains  (cost=1291 rows=6078) (actual time=0.0345..25.9 rows=5208 loops=1)

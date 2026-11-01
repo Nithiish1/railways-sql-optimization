@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Rows](https://img.shields.io/badge/schedules-417%2C080%20rows-16a085)
 ![Queries](https://img.shields.io/badge/case%20studies-7-orange)
-![Best speedup](https://img.shields.io/badge/best%20speedup-183x-success)
+![Best speedup](https://img.shields.io/badge/best%20speedup-193x-success)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 A query-optimization case study on a real, ~430K-row Indian Railways
@@ -13,9 +13,10 @@ dataset (stations, trains, schedules) — diagnosing slow queries with
 a materialized-view simulation, and measuring the before/after impact
 with a reproducible benchmark harness.
 
-**TL;DR:** 7 real queries, each timed cold and hot (median of 5 runs),
-speedups from 1.1x up to **183x**, with every `EXPLAIN ANALYZE` plan
-and every query committed to this repo.
+**TL;DR:** 7 real queries, each measured from a primary-keys-only
+baseline (median of 5 runs on a warm cache), speedups from 1.8x up to
+**193x**, every before/after pair checked to return the same rows, and
+every `EXPLAIN ANALYZE` plan and query committed to this repo.
 
 ## Table of Contents
 
@@ -38,7 +39,9 @@ and every query committed to this repo.
 ```
 railways-sql-optimization/
 ├── sql/schema.sql              # raw, unindexed table definitions
+├── sql/load.sql                # loads the CSVs and verifies row counts
 ├── convert.py                  # GeoJSON -> flat CSV converter
+├── requirements.txt            # dependencies for scripts/
 ├── queries/                    # query{1-7}_{before,after}.sql
 ├── plans/                      # EXPLAIN ANALYZE output, one file per query per state
 ├── benchmark/                  # results.json, write_path_results.json, insights.json
@@ -46,6 +49,7 @@ railways-sql-optimization/
 ├── frontend/app.py             # Streamlit dashboard (benchmarks, insights, live lookup)
 ├── presentation/index.html     # self-contained slide-deck walkthrough
 └── scripts/
+    ├── db.py                    # MySQL connection and shared halt-time SQL
     ├── run_all.py               # orchestrates all 7 case studies end-to-end
     ├── insights.py              # chokepoint/instability/zone/corridor/gateway queries
     ├── make_chart.py            # regenerates benchmark charts
@@ -95,8 +99,8 @@ erDiagram
   }
   SCHEDULES {
     int id PK
-    varchar train_number FK
-    varchar station_code FK
+    varchar train_number
+    varchar station_code
     time arrival
     time departure
     int day
@@ -108,6 +112,12 @@ erDiagram
 this project happens — every station appears in many schedule rows,
 every train runs as many schedule stops, and `schedules` is the
 many-to-many join point between them.
+
+The relationships above are logical: `schema.sql` declares no foreign
+keys, because MySQL would add an index for each one and the baseline
+has to start with primary keys only. Every `train_number` and
+`station_code` in `schedules` does match a row in `trains` and
+`stations`.
 
 ## Data Quality Notes
 
@@ -147,10 +157,19 @@ and the issue is documented here rather than hidden.
 
 **4. Overnight / boundary trains**
 Some schedule rows have `NULL` arrival or departure (trains starting or
-terminating at a stop), and some trains cross midnight (`day` differs
-between a train's origin and destination stop). These are expected,
-real characteristics of the data — not bugs — and are handled explicitly
-in later queries rather than filtered out.
+terminating at a stop), and some halts cross midnight. MySQL `TIME` has
+no date, so a naive `TIMESTAMPDIFF(SECOND, arrival, departure)` reads
+`23:58 → 00:04` as negative. All halt calculations use
+`MOD(diff + 86400, 86400)` to correct this (see `scripts/db.py`).
+
+**5. Impossible halt times**
+A few stops have a departure before their arrival that no midnight
+crossing can explain — for example train 40051 at TBMS arrives 11:03 and
+departs 11:02, which the midnight correction would turn into a
+23 h 59 min halt. No real halt in the data falls between 8 and 17 hours,
+so anything of 12 hours or more is treated as an error. That excludes
+6 of the 384,107 timed stops; the other 115 stops that wrap past
+midnight are kept.
 
 ## Optimization Techniques Covered
 
@@ -164,14 +183,20 @@ in later queries rather than filtered out.
   wrapping
 
 Each technique is benchmarked with a reproducible harness (median of 5
-timed runs per query) and documented as problem → before → fix → after.
+timed runs on a warm cache, except Q3's before, which is a single run)
+and documented as problem → before → fix → after.
 
 ## Setup
 
-1. `python convert.py` — flattens the raw JSON into `data/*.csv`
-2. Copy the CSVs into MySQL's `secure_file_priv` folder
-3. Run `sql/schema.sql` — creates the raw, unindexed tables
-4. Run `sql/load.sql` — loads and verifies row counts
+1. `pip install -r requirements.txt`
+2. Set `MYSQL_PASSWORD` in your environment (`MYSQL_HOST`, `MYSQL_PORT`,
+   `MYSQL_USER` and `MYSQL_DATABASE` are also read, defaulting to
+   `localhost`, `3306`, `root` and `indian_railways`)
+3. `python convert.py` — flattens the raw JSON into `data/*.csv`
+4. Copy the CSVs into MySQL's `secure_file_priv` folder
+5. Run `sql/schema.sql` — creates the raw, unindexed tables
+6. Run `sql/load.sql` — loads and verifies row counts (edit its three
+   file paths if your `secure_file_priv` folder isn't the Windows default)
 
 ## Why These Queries
 
@@ -235,13 +260,16 @@ concurrency/throughput engineering for a production system.
 
 ## Results — Query Case Studies
 
-Every query below was run on the same MySQL 8.0.37 instance, on the raw
-417,080-row `schedules` table (plus the small `stations`/`trains`
-lookup tables), with no indexes beyond the primary keys as the
-starting point. Each "before" and "after" number is the **median of 5
-timed runs**, measured end-to-end (query execution + result fetch)
-via a Python harness (`scripts/run_all.py`) so the numbers are
-reproducible rather than a single lucky/unlucky run. Full query text
+Every query below was run on the same MySQL 8.0.37 instance, on the
+full 417,080-row `schedules` table (plus the small `stations`/`trains`
+lookup tables). The harness (`scripts/run_all.py`) drops every secondary
+index before each case study, so no query inherits an index from an
+earlier one, and it stops with an error if a before/after pair returns
+different rows (Q5 is the one exception, because its projection
+deliberately returns fewer columns). Each number is the **median of 5
+timed runs** on a warm cache, measured end-to-end (query execution +
+result fetch), so the numbers are reproducible rather than a single
+lucky/unlucky run. Full query text
 is in [`queries/`](queries/), full `EXPLAIN ANALYZE` output for every
 before/after pair is in [`plans/`](plans/), raw timings are in
 [`benchmark/results.json`](benchmark/results.json), and the chart
@@ -253,13 +281,33 @@ below is generated by `scripts/make_chart.py`.
 
 | # | Query | Technique | Before | After | Speedup |
 |---|-------|-----------|-------:|------:|--------:|
-| 1 | Average halt time per station | Covering index `(station_code, station_name, arrival, departure)` | 2341 ms | 983 ms | 2.4x |
-| 2 | Trains through a station in a time window | Composite index `(station_code, arrival)` | 4.9 ms | 4.4 ms | 1.1x |
-| 3 | Longest-halting station per train | Correlated subquery → `RANK() OVER` window function | 600 ms | 3.3 ms | **183x** |
-| 4 | Stations served by a Rajdhani/Duronto train | Index on `schedules.train_number` + `JOIN` rewrite | 853 ms | 189 ms | 4.5x |
-| 5 | Full train route lookup by origin station | `SELECT *` → projected columns + index | 31 ms | 6.9 ms | 4.4x |
-| 6 | Deep pagination into `schedules` | `OFFSET 300000` → keyset (seek) pagination | 268 ms | 2.3 ms | **116x** |
-| 7 | Station traffic dashboard aggregation | Materialized-view-style summary table | 3857 ms | 225 ms | **17x** |
+| 1 | Average halt time per station | Covering index `(station_code, station_name, arrival, departure)` | 1731 ms | 971 ms | 1.8x |
+| 2 | Trains through a station in a time window | Composite index `(station_code, arrival)` | 415 ms | 3.4 ms | **122x** |
+| 3 | Longest-halting station per train | Correlated subquery → `RANK() OVER` window function | 360.6 s | 7.4 s | **48x** |
+| 4 | Stations served by a Rajdhani/Duronto train | Index on `schedules.train_number` + `JOIN` rewrite | 916 ms | 113 ms | 8.1x |
+| 5 | Full train route lookup by origin station | Index + `SELECT *` → projected columns | 29 ms | 5.1 ms | 5.8x |
+| 6 | Deep pagination into `schedules` | `OFFSET 300000` → keyset (seek) pagination | 274 ms | 1.4 ms | **193x** |
+| 7 | Station traffic dashboard aggregation | Materialized-view-style summary table | 3250 ms | 118 ms | **28x** |
+
+A few of these need context to read fairly:
+
+- **Q1** only reaches 1.8x because it still reads every row; the covering
+  index removes the temporary table but not the full scan. Stations with
+  fewer than 20 timed stops are excluded so a couple of long halts can't
+  top the ranking.
+- **Q3** runs on the full table with `idx_sched_trainnum` in place on
+  both sides, because without that index the correlated subquery
+  re-scans all 417K rows for each of 384K outer rows. Even with it, the
+  before takes about 6 minutes, so that number is a **single run** rather
+  than a median of 5.
+- **Q4**'s gain comes from the indexes, not the rewrite. Once indexed,
+  `JOIN`, `IN` and `EXISTS` all land within noise of each other
+  (113 ms, 107 ms and 106 ms).
+- **Q5** bundles two changes, so `SELECT *` was also timed with the index
+  alone: the index takes it from 29 ms to 6.8 ms, and projecting fewer
+  columns takes it the rest of the way to 5.1 ms.
+- **Q7**'s after is a 3 ms table read on the server (see its plan); most
+  of the 118 ms is fetching 7,499 rows into Python.
 
 ### Proof, not just a claim — Q6's actual EXPLAIN ANALYZE
 
@@ -267,8 +315,8 @@ below is generated by `scripts/make_chart.py`.
 <summary><b>Before</b> — OFFSET 300000 (click to expand)</summary>
 
 ```
--> Limit/Offset: 20/300000 row(s)  (cost=23021 rows=20) (actual time=314..314 rows=20 loops=1)
-    -> Index scan on schedules using PRIMARY  (cost=23021 rows=300020) (actual time=0.0911..286 rows=300020 loops=1)
+-> Limit/Offset: 20/300000 row(s)  (cost=21615 rows=20) (actual time=316..316 rows=20 loops=1)
+    -> Index scan on schedules using PRIMARY  (cost=21615 rows=300020) (actual time=0.102..289 rows=300020 loops=1)
 ```
 
 MySQL still has to walk **300,020 rows** through the primary key index
@@ -280,14 +328,16 @@ before it can throw away the first 300,000 and return the last 20.
 <summary><b>After</b> — keyset (seek) pagination (click to expand)</summary>
 
 ```
--> Limit: 20 row(s)  (cost=42878 rows=20) (actual time=0.0275..0.0512 rows=20 loops=1)
-    -> Filter: (schedules.id > 300000)  (cost=42878 rows=212829) (actual time=0.0266..0.0482 rows=20 loops=1)
-        -> Index range scan on schedules using PRIMARY over (300000 < id)  (cost=42878 rows=212829) (actual time=0.0248..0.044 rows=20 loops=1)
+-> Limit: 20 row(s)  (cost=42644 rows=20) (actual time=0.0209..0.0392 rows=20 loops=1)
+    -> Filter: (schedules.id > 423375)  (cost=42644 rows=212829) (actual time=0.0203..0.037 rows=20 loops=1)
+        -> Index range scan on schedules using PRIMARY over (423375 < id)  (cost=42644 rows=212829) (actual time=0.0189..0.0336 rows=20 loops=1)
 ```
 
-Same index, same table — but `WHERE id > 300000 LIMIT 20` seeks
-directly to the right spot instead of scanning past everything before
-it: 286 ms → 0.05 ms of actual scan time for the 20 rows returned.
+Same index, same table, same 20 rows — but `WHERE id > 423375 LIMIT 20`
+seeks directly to the right spot instead of scanning past everything
+before it: 289 ms → 0.03 ms of actual scan time. The cursor is 423375,
+not 300000, because ids have gaps: it's the last id of the previous page,
+which a real client would already hold.
 
 </details>
 
@@ -304,9 +354,9 @@ insert strategy on 5,000 rows (results in
 
 | Strategy | Time (5,000 rows) | Speedup vs autocommit |
 |---|---:|---:|
-| Row-by-row, autocommit per insert | 13,648 ms | 1x |
-| Row-by-row, wrapped in one transaction | 3,719 ms | 3.7x |
-| Bulk multi-row `INSERT` (`executemany`) | 150 ms | **91x** |
+| Row-by-row, autocommit per insert | 11,756 ms | 1x |
+| Row-by-row, wrapped in one transaction | 735 ms | 16x |
+| Bulk multi-row `INSERT` (`executemany`) | 67 ms | **175x** |
 
 Autocommit-per-row pays a full transaction commit (fsync) for every
 single row; wrapping the same loop in one transaction removes that
@@ -343,15 +393,12 @@ ending point:
 
 For each train, the standard deviation of its own halt time across its
 stops — a proxy for scheduling inconsistency (some stops padded
-heavily, others barely touched). Note: this required a **second, real
-data-quality fix** on top of the ones in the README's Data Quality
-Notes — a naive `TIMESTAMPDIFF(SECOND, arrival, departure)` produces
-large negative values for any stop where a train's halt straddles
-midnight (MySQL `TIME` has no date component, so `23:58 → 00:04` reads
-as *negative* six hours instead of positive six minutes). The query
-below corrects for that with `MOD(diff + 86400, 86400)` before
-aggregating — without it, the "top 5" list was dominated entirely by
-this artifact, not real instability:
+heavily, others barely touched). This ranking depends on both halt-time
+fixes in the Data Quality Notes: without the midnight correction it
+fills up with negative halts, and with the correction alone the top 3
+are EMU trains whose impossible times become fake 22-to-24-hour halts.
+With both, the leaders sit at 33–44 minutes and are mostly passenger and
+slip-coach services:
 
 ![Unstable trains](charts/unstable_trains.png)
 
@@ -364,7 +411,8 @@ bottleneck for its whole zone:
 ![Zone concentration](charts/zone_concentration.png)
 
 The honest finding here is a **non-finding**: the highest concentration
-across all 15 zones checked is only ~1.6% (Suravali in the KR zone).
+across all 17 named zones is only ~1.6% (Majorda and Suravali, tied in
+the small KR zone).
 No zone in this dataset has a single station carrying a disproportionate
 share of its traffic — the network is structurally well-distributed by
 this measure, which is a real, if less dramatic, result worth reporting
@@ -421,8 +469,9 @@ A Streamlit dashboard (`frontend/app.py`) turns the static results into
 something clickable: benchmark results with sortable tables and
 charts, the insight/network analysis above, the write-path
 comparison, and a **live Query-2 lookup** (station + time window) that
-runs directly against MySQL if a local connection is available —
-falling back gracefully to "no DB connection" if not.
+runs directly against MySQL if a connection is available (using the
+same `MYSQL_*` settings as the scripts) — falling back gracefully to
+"no DB connection" if not.
 
 ```
 pip install -r frontend/requirements.txt
@@ -445,7 +494,7 @@ python scripts/make_presentation.py
 ### Reproducing
 
 ```
-python scripts/run_all.py            # runs all 7 case studies, writes queries/, plans/, benchmark/results.json
+python scripts/run_all.py            # runs all 7 case studies (about 15 minutes), writes queries/, plans/, benchmark/results.json
 python scripts/insights.py           # runs the network/insight queries, writes benchmark/insights.json
 python scripts/make_chart.py         # regenerates the benchmark charts
 python scripts/make_insight_charts.py  # regenerates the insight charts

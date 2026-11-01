@@ -1,8 +1,9 @@
 """
 Orchestrates all 7 query case studies for the Indian Railways SQL
-optimization project: runs the 'before' query, captures EXPLAIN ANALYZE +
-median-of-5 timing, applies the fix (index/rewrite/summary table),
-re-runs 'after', and writes everything to queries/, plans/, benchmark/.
+optimization project: resets to primary keys only, runs the 'before' query,
+captures EXPLAIN ANALYZE + median-of-5 timing, applies the fix
+(index/rewrite/summary table), re-runs 'after', checks both return the same
+rows, and writes everything to queries/, plans/, benchmark/.
 """
 import pymysql
 import statistics
@@ -10,13 +11,22 @@ import time
 import json
 import os
 
+from db import connect, halt_seconds, valid_halt
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUERIES = os.path.join(ROOT, "queries")
 PLANS = os.path.join(ROOT, "plans")
 BENCH = os.path.join(ROOT, "benchmark")
 
-conn = pymysql.connect(host="localhost", user="root", password="root",
-                        port=3306, database="indian_railways", autocommit=True)
+conn = connect(autocommit=True)
+
+INDEXES = {
+    "idx_sched_halt": ("schedules", "CREATE INDEX idx_sched_halt ON schedules (station_code, station_name, arrival, departure);"),
+    "idx_sched_station_arrival": ("schedules", "CREATE INDEX idx_sched_station_arrival ON schedules (station_code, arrival);"),
+    "idx_sched_trainnum": ("schedules", "CREATE INDEX idx_sched_trainnum ON schedules (train_number);"),
+    "idx_trains_type": ("trains", "CREATE INDEX idx_trains_type ON trains (train_type);"),
+    "idx_trains_from": ("trains", "CREATE INDEX idx_trains_from ON trains (from_station_code);"),
+}
 
 
 def run_timed(sql, runs=5):
@@ -25,11 +35,11 @@ def run_timed(sql, runs=5):
     for _ in range(runs):
         t0 = time.perf_counter()
         cur.execute(sql)
-        cur.fetchall()
+        rows = cur.fetchall()
         times.append((time.perf_counter() - t0) * 1000
                       )
     cur.close()
-    return round(statistics.median(times), 2), times
+    return round(statistics.median(times), 2), sorted(rows, key=repr)
 
 
 def explain_analyze(sql):
@@ -51,23 +61,20 @@ def save(path, content):
         f.write(content)
 
 
-def cleanup():
-    cleanup_ddls = [
-        "DROP INDEX idx_sched_halt ON schedules",
-        "DROP INDEX idx_sched_station_arrival ON schedules",
-        "DROP INDEX idx_trains_type ON trains",
-        "DROP INDEX idx_trains_from ON trains",
-        "DROP INDEX idx_sched_trainnum ON schedules",
-        "DROP TABLE IF EXISTS station_traffic_summary",
-        "DROP TABLE IF EXISTS q_working_set",
-    ]
+def drop_indexes():
     cur = conn.cursor()
-    for ddl in cleanup_ddls:
+    for name, (table, _) in INDEXES.items():
         try:
-            cur.execute(ddl)
+            cur.execute(f"DROP INDEX {name} ON {table}")
         except pymysql.err.Error:
             pass
     cur.close()
+
+
+def cleanup():
+    drop_indexes()
+    exec_ddl("DROP TABLE IF EXISTS station_traffic_summary")
+    exec_ddl("DROP TABLE IF EXISTS q_working_set")
 
 
 cleanup()
@@ -75,9 +82,17 @@ cleanup()
 results = []
 
 
-def case_study(n, title, technique, before_sql, ddl_fixes, after_sql, notes=""):
+def case_study(n, title, technique, before_sql, ddl_fixes, after_sql, notes="",
+               setup_ddls=(), variants=None, same_rows=True, before_runs=5):
     print(f"\n=== Query {n}: {title} ===")
-    before_ms, _ = run_timed(before_sql)
+    # Every case study starts from primary keys only, so no query inherits
+    # an index from an earlier one. setup_ddls are prerequisites shared by
+    # both sides of the comparison.
+    drop_indexes()
+    for ddl in setup_ddls:
+        exec_ddl(ddl)
+
+    before_ms, before_rows = run_timed(before_sql, runs=before_runs)
     before_plan = explain_analyze(before_sql)
     print(f"before: {before_ms} ms")
 
@@ -85,9 +100,17 @@ def case_study(n, title, technique, before_sql, ddl_fixes, after_sql, notes=""):
         print(f"applying fix: {ddl.strip()[:80]}...")
         exec_ddl(ddl)
 
-    after_ms, _ = run_timed(after_sql)
+    after_ms, after_rows = run_timed(after_sql)
     after_plan = explain_analyze(after_sql)
     print(f"after: {after_ms} ms")
+
+    if same_rows and before_rows != after_rows:
+        raise RuntimeError(f"Query {n}: before and after returned different rows")
+
+    variants_ms = {}
+    for label, sql in (variants or {}).items():
+        variants_ms[label], _ = run_timed(sql)
+        print(f"variant '{label}': {variants_ms[label]} ms")
 
     save(os.path.join(QUERIES, f"query{n}_before.sql"), before_sql.strip() + "\n")
     save(os.path.join(QUERIES, f"query{n}_after.sql"), after_sql.strip() + "\n")
@@ -96,111 +119,98 @@ def case_study(n, title, technique, before_sql, ddl_fixes, after_sql, notes=""):
 
     results.append({
         "n": n, "title": title, "technique": technique,
-        "before_ms": before_ms, "after_ms": after_ms,
+        "before_ms": before_ms, "after_ms": after_ms, "before_runs": before_runs,
         "speedup": round(before_ms / after_ms, 1) if after_ms else None,
+        "same_rows_checked": same_rows,
+        "variants_ms": variants_ms,
         "notes": notes,
     })
 
 
 # ---------------------------------------------------------------- Query 1
+q1_sql = f"""
+    SELECT station_code, station_name,
+           AVG({halt_seconds()}) AS avg_halt_seconds,
+           COUNT(*) AS stop_count
+    FROM schedules
+    WHERE {valid_halt()}
+    GROUP BY station_code, station_name
+    HAVING stop_count >= 20
+    ORDER BY avg_halt_seconds DESC, station_code
+    LIMIT 20;
+"""
 case_study(
     1, "Average halt time per station",
     "Covering index on filter+group+aggregate columns",
-    before_sql="""
-        SELECT station_code, station_name,
-               AVG(TIMESTAMPDIFF(SECOND, arrival, departure)) AS avg_halt_seconds,
-               COUNT(*) AS stop_count
-        FROM schedules
-        WHERE arrival IS NOT NULL AND departure IS NOT NULL
-        GROUP BY station_code, station_name
-        ORDER BY avg_halt_seconds DESC
-        LIMIT 20;
-    """,
-    ddl_fixes=[
-        "CREATE INDEX idx_sched_halt ON schedules (station_code, station_name, arrival, departure);",
-    ],
-    after_sql="""
-        SELECT station_code, station_name,
-               AVG(TIMESTAMPDIFF(SECOND, arrival, departure)) AS avg_halt_seconds,
-               COUNT(*) AS stop_count
-        FROM schedules
-        WHERE arrival IS NOT NULL AND departure IS NOT NULL
-        GROUP BY station_code, station_name
-        ORDER BY avg_halt_seconds DESC
-        LIMIT 20;
-    """,
-    notes="Ranking is skewed by low stop_count stations; production version would add HAVING stop_count >= N.",
+    before_sql=q1_sql,
+    ddl_fixes=[INDEXES["idx_sched_halt"][1]],
+    after_sql=q1_sql,
+    notes="Stations with fewer than 20 timed stops are excluded so a handful of long halts can't top the ranking.",
 )
 
 # ---------------------------------------------------------------- Query 2
+q2_sql = """
+    SELECT train_number, train_name, arrival, departure
+    FROM schedules
+    WHERE station_code = 'CNB' AND arrival BETWEEN '06:00:00' AND '10:00:00'
+    ORDER BY arrival;
+"""
 case_study(
     2, "Trains passing through a station within a time window",
     "Composite index on (station_code, arrival)",
-    before_sql="""
-        SELECT train_number, train_name, arrival, departure
-        FROM schedules
-        WHERE station_code = 'CNB' AND arrival BETWEEN '06:00:00' AND '10:00:00'
-        ORDER BY arrival;
-    """,
-    ddl_fixes=[
-        "CREATE INDEX idx_sched_station_arrival ON schedules (station_code, arrival);",
-    ],
-    after_sql="""
-        SELECT train_number, train_name, arrival, departure
-        FROM schedules
-        WHERE station_code = 'CNB' AND arrival BETWEEN '06:00:00' AND '10:00:00'
-        ORDER BY arrival;
-    """,
+    before_sql=q2_sql,
+    ddl_fixes=[INDEXES["idx_sched_station_arrival"][1]],
+    after_sql=q2_sql,
     notes="Classic range-query composite index: equality column first, range column second.",
 )
 
 # ---------------------------------------------------------------- Query 3
-exec_ddl("DROP TABLE IF EXISTS q_working_set")
-exec_ddl("""
-    CREATE TABLE q_working_set AS
-    SELECT train_number, station_code, station_name,
-           TIMESTAMPDIFF(SECOND, arrival, departure) AS halt_seconds
-    FROM schedules
-    WHERE arrival IS NOT NULL AND departure IS NOT NULL
-      AND train_number IN (SELECT train_number FROM (SELECT DISTINCT train_number FROM schedules ORDER BY train_number LIMIT 20) t300);
-""")
 case_study(
     3, "Longest-halting station per train",
     "Correlated subquery -> window function (RANK)",
-    before_sql="""
-        SELECT s1.train_number, s1.station_code, s1.station_name, s1.halt_seconds
-        FROM q_working_set s1
-        WHERE s1.halt_seconds = (
-            SELECT MAX(s2.halt_seconds) FROM q_working_set s2 WHERE s2.train_number = s1.train_number
-        );
+    before_sql=f"""
+        SELECT s1.train_number, s1.station_code, s1.station_name,
+               {halt_seconds('s1')} AS halt_seconds
+        FROM schedules s1
+        WHERE {valid_halt('s1')}
+          AND {halt_seconds('s1')} = (
+              SELECT MAX({halt_seconds('s2')})
+              FROM schedules s2
+              WHERE s2.train_number = s1.train_number AND {valid_halt('s2')}
+          );
     """,
     ddl_fixes=[],
-    after_sql="""
+    after_sql=f"""
         SELECT train_number, station_code, station_name, halt_seconds
         FROM (
-            SELECT train_number, station_code, station_name, halt_seconds,
-                   RANK() OVER (PARTITION BY train_number ORDER BY halt_seconds DESC) AS rnk
-            FROM q_working_set
+            SELECT train_number, station_code, station_name,
+                   {halt_seconds()} AS halt_seconds,
+                   RANK() OVER (PARTITION BY train_number ORDER BY {halt_seconds()} DESC) AS rnk
+            FROM schedules
+            WHERE {valid_halt()}
         ) ranked
         WHERE rnk = 1;
     """,
-    notes="Demonstrated on a 20-train / ~650-row working set materialized from schedules (the full, unindexed-train_number correlated version re-scanning all 417K rows per outer row would take many minutes on the raw table, so the underlying data is pre-filtered here for a tractable, fair before/after comparison). The correlated subquery still re-evaluates its inner MAX subquery once per outer row (O(n^2) within the working set); the window function computes the ranking in a single pass over the same data.",
+    setup_ddls=[INDEXES["idx_sched_trainnum"][1]],
+    before_runs=1,
+    notes="The correlated form takes minutes per run, so before_ms is a single run rather than a median of 5. Both sides run on the full table with idx_sched_trainnum in place, because without it the correlated subquery re-scans all 417K rows for each of ~384K outer rows and never finishes in practical time. The correlated form still runs its inner MAX once per outer row; the window function ranks everything in one sort.",
 )
 
 # ---------------------------------------------------------------- Query 4
+q4_in_sql = """
+    SELECT DISTINCT station_code, station_name
+    FROM schedules
+    WHERE train_number IN (
+        SELECT train_number FROM trains WHERE train_type IN ('Raj', 'Drnt')
+    );
+"""
 case_study(
     4, "Stations served by at least one Rajdhani/Duronto train",
     "Index on join/filter column (schedules.train_number) + JOIN rewrite",
-    before_sql="""
-        SELECT DISTINCT station_code, station_name
-        FROM schedules
-        WHERE train_number IN (
-            SELECT train_number FROM trains WHERE train_type IN ('Raj', 'Drnt')
-        );
-    """,
+    before_sql=q4_in_sql,
     ddl_fixes=[
-        "CREATE INDEX idx_trains_type ON trains (train_type);",
-        "CREATE INDEX idx_sched_trainnum ON schedules (train_number);",
+        INDEXES["idx_trains_type"][1],
+        INDEXES["idx_sched_trainnum"][1],
     ],
     after_sql="""
         SELECT DISTINCT sch.station_code, sch.station_name
@@ -208,27 +218,46 @@ case_study(
         JOIN trains t ON t.train_number = sch.train_number
         WHERE t.train_type IN ('Raj', 'Drnt');
     """,
-    notes="The real bottleneck here wasn't IN vs JOIN (both were tested and performed the same once indexed) - it was a full 417K-row scan of schedules with no index on the FK column being filtered/joined on (train_number). Adding idx_sched_trainnum alongside idx_trains_type is what actually fixes it; the JOIN form is kept because it's the clearer way to write the same query, not because it's structurally faster than IN here.",
+    variants={
+        "IN, indexed": q4_in_sql,
+        "EXISTS, indexed": """
+            SELECT DISTINCT sch.station_code, sch.station_name
+            FROM schedules sch
+            WHERE EXISTS (
+                SELECT 1 FROM trains t
+                WHERE t.train_number = sch.train_number AND t.train_type IN ('Raj', 'Drnt')
+            );
+        """,
+    },
+    notes="The bottleneck is the full 417K-row scan of schedules with no index on train_number, not the IN/EXISTS/JOIN syntax: variants_ms times all three forms once indexed. The JOIN form is kept for clarity.",
 )
 
 # ---------------------------------------------------------------- Query 5
+q5_star_sql = """
+    SELECT * FROM trains WHERE from_station_code = 'NDLS';
+"""
 case_study(
     5, "Full train route detail lookup",
-    "SELECT * vs projected columns",
-    before_sql="""
-        SELECT * FROM trains WHERE from_station_code = 'NDLS';
-    """,
-    ddl_fixes=[
-        "CREATE INDEX idx_trains_from ON trains (from_station_code);",
-    ],
+    "Index on from_station_code + SELECT * -> projected columns",
+    before_sql=q5_star_sql,
+    ddl_fixes=[INDEXES["idx_trains_from"][1]],
     after_sql="""
         SELECT train_number, train_name, train_type, to_station_code, departure, arrival, distance
         FROM trains WHERE from_station_code = 'NDLS';
     """,
-    notes="SELECT * drags the large route_path TEXT column off-page for every row; projecting only needed columns lets the query be answered largely from the index/short row data.",
+    variants={"SELECT *, indexed": q5_star_sql},
+    same_rows=False,
+    notes="Two changes are bundled here, so variants_ms times SELECT * with the index alone to separate them: the gap from before_ms is the index, the gap to after_ms is dropping route_path and the other unused columns. Rows aren't compared because the projection returns fewer columns.",
 )
 
 # ---------------------------------------------------------------- Query 6
+# The cursor is the last id of the previous page. ids have gaps, so it is
+# not simply 300000; a real client would already hold it from that page.
+cur = conn.cursor()
+cur.execute("SELECT id FROM schedules ORDER BY id LIMIT 1 OFFSET 299999")
+page_cursor = cur.fetchone()[0]
+cur.close()
+
 case_study(
     6, "Paginating deep into the schedules table",
     "OFFSET pagination vs keyset (seek) pagination",
@@ -239,37 +268,32 @@ case_study(
         LIMIT 20 OFFSET 300000;
     """,
     ddl_fixes=[],
-    after_sql="""
+    after_sql=f"""
         SELECT id, train_number, station_code, arrival
         FROM schedules
-        WHERE id > 300000
+        WHERE id > {page_cursor}
         ORDER BY id
         LIMIT 20;
     """,
-    notes="OFFSET forces MySQL to scan and discard 300,000 rows before returning 20; keyset pagination seeks directly via the primary key.",
+    notes=f"OFFSET forces MySQL to scan and discard 300,000 rows before returning 20; keyset pagination seeks directly via the primary key. The cursor {page_cursor} is the last id of the previous page, so both queries return the same 20 rows.",
 )
 
 # ---------------------------------------------------------------- Query 7
+q7_aggregate = f"""
+    SELECT station_code, station_name, COUNT(*) AS total_stops,
+           COUNT(DISTINCT train_number) AS train_count,
+           AVG({halt_seconds()}) AS avg_halt_seconds
+    FROM schedules
+    WHERE {valid_halt()}
+    GROUP BY station_code, station_name
+"""
 case_study(
     7, "Live aggregation vs materialized-view-style summary table",
     "Summary table simulating a materialized view",
-    before_sql="""
-        SELECT station_code, station_name, COUNT(*) AS total_stops,
-               COUNT(DISTINCT train_number) AS train_count,
-               AVG(TIMESTAMPDIFF(SECOND, arrival, departure)) AS avg_halt_seconds
-        FROM schedules
-        WHERE arrival IS NOT NULL AND departure IS NOT NULL
-        GROUP BY station_code, station_name;
-    """,
+    before_sql=q7_aggregate + ";",
     ddl_fixes=[
         "DROP TABLE IF EXISTS station_traffic_summary;",
-        """CREATE TABLE station_traffic_summary AS
-           SELECT station_code, station_name, COUNT(*) AS total_stops,
-                  COUNT(DISTINCT train_number) AS train_count,
-                  AVG(TIMESTAMPDIFF(SECOND, arrival, departure)) AS avg_halt_seconds
-           FROM schedules
-           WHERE arrival IS NOT NULL AND departure IS NOT NULL
-           GROUP BY station_code, station_name;""",
+        f"CREATE TABLE station_traffic_summary AS {q7_aggregate};",
         "ALTER TABLE station_traffic_summary ADD PRIMARY KEY (station_code);",
     ],
     after_sql="""
@@ -278,6 +302,11 @@ case_study(
     """,
     notes="MySQL has no native materialized view; this simulates one with a summary table refreshed periodically (e.g. via an EVENT). Query time drops to a plain table read at the cost of staleness between refreshes.",
 )
+
+# Leave the database fully optimized for insights.py and the live dashboard.
+drop_indexes()
+for _, ddl in INDEXES.values():
+    exec_ddl(ddl)
 
 save(os.path.join(BENCH, "results.json"), json.dumps(results, indent=2))
 print("\n\nAll 7 case studies complete. Results written to benchmark/results.json")

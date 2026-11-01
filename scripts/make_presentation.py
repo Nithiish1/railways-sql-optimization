@@ -32,6 +32,8 @@ charts = {
     ]
 }
 
+best_speedup = max(r["speedup"] for r in results)
+
 results_rows = "\n".join(
     f"<tr><td>Q{r['n']}</td><td>{r['title']}</td><td>{r['technique']}</td>"
     f"<td>{r['before_ms']} ms</td><td>{r['after_ms']} ms</td><td><b>{r['speedup']}x</b></td></tr>"
@@ -88,7 +90,7 @@ html = f"""<!doctype html>
     <p>Diagnosing and fixing slow queries on a real 417,080-row dataset<br>
     with <code>EXPLAIN ANALYZE</code>, indexing, query rewriting, and a materialized-view simulation.</p>
     <div class="badges">
-      <span>MySQL 8.0.37</span><span>Python 3.12</span><span>7 case studies</span><span>Best speedup: 183x</span>
+      <span>MySQL 8.0.37</span><span>Python 3.12</span><span>7 case studies</span><span>Best speedup: {best_speedup:.0f}x</span>
     </div>
   </div>
 
@@ -113,9 +115,9 @@ html = f"""<!doctype html>
     <div class="kicker">Method</div>
     <h2>Diagnose → Fix → Verify</h2>
     <ul>
-      <li>Run query cold on unindexed table, capture <code>EXPLAIN ANALYZE</code></li>
+      <li>Reset to primary keys only, run the query, capture <code>EXPLAIN ANALYZE</code></li>
       <li>Apply one targeted fix: index, rewrite, or summary table</li>
-      <li>Re-run, re-capture <code>EXPLAIN ANALYZE</code>, compare</li>
+      <li>Re-run, re-capture <code>EXPLAIN ANALYZE</code>, confirm the rows match, compare</li>
       <li>Document <i>why</i> it worked</li>
     </ul>
   </div>
@@ -181,7 +183,7 @@ html = f"""<!doctype html>
     <div class="kicker">Live Demo</div>
     <h2>Streamlit Dashboard</h2>
     <p>A deployable frontend (<code>frontend/app.py</code>) turns this repo into something clickable:<br>
-    benchmark results, chokepoint insights, write-path chart, and a live Query-3 lookup against MySQL.</p>
+    benchmark results, chokepoint insights, write-path chart, and a live Query-2 lookup against MySQL.</p>
     <div class="badges"><span>streamlit run frontend/app.py</span></div>
   </div>
 
