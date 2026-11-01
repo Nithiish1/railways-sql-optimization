@@ -2,7 +2,7 @@
 Streamlit dashboard for the Indian Railways SQL Optimization project.
 
 Two modes:
-- If a live MySQL connection is available (same creds as scripts/run_all.py),
+- If a live MySQL connection is available (same MYSQL_* settings as scripts/db.py),
   Q2 (station + time-window lookup) runs live against the real database.
 - Everything else (benchmark results, insights) reads from the committed
   JSON files in benchmark/, so the dashboard works even without a DB
@@ -31,6 +31,10 @@ st.caption(
 def load_json(name):
     with open(os.path.join(ROOT, "benchmark", name)) as f:
         return json.load(f)
+
+
+def chart_path(name):
+    return os.path.join(ROOT, "charts", name)
 
 
 results = load_json("results.json")
@@ -68,11 +72,11 @@ with tab2:
         )
         cp_df = pd.DataFrame(insights["chokepoint_stations"])
         st.dataframe(cp_df, use_container_width=True, hide_index=True)
-        st.image("charts/chokepoint_stations.png")
+        st.image(chart_path("chokepoint_stations.png"))
 
         st.subheader("Most schedule-inconsistent trains")
         st.caption("Highest halt-time standard deviation across a train's own stops (overnight-corrected).")
-        st.image("charts/unstable_trains.png")
+        st.image(chart_path("unstable_trains.png"))
 
         st.subheader("Zone traffic concentration")
         st.caption(
@@ -80,7 +84,7 @@ with tab2:
             "Max concentration found is ~1.6% — the network turns out to be well distributed, "
             "no zone has a dominant single-station bottleneck by this measure."
         )
-        st.image("charts/zone_concentration.png")
+        st.image(chart_path("zone_concentration.png"))
 
         st.subheader("Longest single-train routes")
         st.caption("Longest end-to-end journeys — most exposed to any single delay compounding.")
@@ -90,13 +94,13 @@ with tab2:
         if "busiest_corridors" in insights:
             st.subheader("Busiest origin-destination corridors")
             st.caption("Station pairs with the most distinct trains running directly between them.")
-            st.image("charts/busiest_corridors.png")
+            st.image(chart_path("busiest_corridors.png"))
             st.dataframe(pd.DataFrame(insights["busiest_corridors"]), use_container_width=True, hide_index=True)
 
         if "gateway_stations" in insights:
             st.subheader("Gateway stations (cross-zone connectivity hubs)")
             st.caption("Stations where trains from the most distinct railway zones converge.")
-            st.image("charts/gateway_stations.png")
+            st.image(chart_path("gateway_stations.png"))
             st.dataframe(pd.DataFrame(insights["gateway_stations"]), use_container_width=True, hide_index=True)
 
 with tab3:
@@ -123,8 +127,13 @@ with tab4:
     if st.button("Run query"):
         try:
             import pymysql
-            conn = pymysql.connect(host="localhost", user="root", password="root",
-                                    port=3306, database="indian_railways")
+            conn = pymysql.connect(
+                host=os.environ.get("MYSQL_HOST", "localhost"),
+                port=int(os.environ.get("MYSQL_PORT", "3306")),
+                user=os.environ.get("MYSQL_USER", "root"),
+                password=os.environ.get("MYSQL_PASSWORD", ""),
+                database=os.environ.get("MYSQL_DATABASE", "indian_railways"),
+            )
             cur = conn.cursor(pymysql.cursors.DictCursor)
             cur.execute(
                 "SELECT train_number, train_name, arrival, departure FROM schedules "

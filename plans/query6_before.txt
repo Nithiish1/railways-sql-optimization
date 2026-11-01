@@ -1,2 +1,2 @@
--> Limit/Offset: 20/300000 row(s)  (cost=23021 rows=20) (actual time=314..314 rows=20 loops=1)
-    -> Index scan on schedules using PRIMARY  (cost=23021 rows=300020) (actual time=0.0911..286 rows=300020 loops=1)
+-> Limit/Offset: 20/300000 row(s)  (cost=21615 rows=20) (actual time=316..316 rows=20 loops=1)
+    -> Index scan on schedules using PRIMARY  (cost=21615 rows=300020) (actual time=0.102..289 rows=300020 loops=1)

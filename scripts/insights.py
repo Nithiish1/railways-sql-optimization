@@ -8,9 +8,10 @@ import pymysql
 import json
 import os
 
+from db import connect, halt_seconds, valid_halt
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-conn = pymysql.connect(host="localhost", user="root", password="root",
-                        port=3306, database="indian_railways")
+conn = connect()
 cur = conn.cursor(pymysql.cursors.DictCursor)
 
 insights = {}
@@ -37,13 +38,13 @@ insights["chokepoint_stations"] = cur.fetchall()
 # Schedule instability: trains whose halt times vary the most across their
 # own stops (high stddev) - a proxy for inconsistent/unstable scheduling
 # (some stops padded heavily, others barely touched).
-cur.execute("""
+cur.execute(f"""
     SELECT train_number, train_name,
            COUNT(*) AS stops,
-           ROUND(STDDEV(MOD(TIMESTAMPDIFF(SECOND, arrival, departure) + 86400, 86400)), 1) AS halt_stddev_seconds,
-           ROUND(AVG(MOD(TIMESTAMPDIFF(SECOND, arrival, departure) + 86400, 86400)), 1) AS halt_avg_seconds
+           ROUND(STDDEV({halt_seconds()}), 1) AS halt_stddev_seconds,
+           ROUND(AVG({halt_seconds()}), 1) AS halt_avg_seconds
     FROM schedules
-    WHERE arrival IS NOT NULL AND departure IS NOT NULL
+    WHERE {valid_halt()}
     GROUP BY train_number, train_name
     HAVING stops >= 10
     ORDER BY halt_stddev_seconds DESC
@@ -69,7 +70,7 @@ cur.execute("""
         GROUP BY t.zone, s.station_code, s.station_name
     ),
     ranked AS (
-        SELECT siz.*, ROW_NUMBER() OVER (PARTITION BY siz.zone ORDER BY siz.stop_count DESC) AS rnk
+        SELECT siz.*, ROW_NUMBER() OVER (PARTITION BY siz.zone ORDER BY siz.stop_count DESC, siz.station_code) AS rnk
         FROM station_in_zone siz
     )
     SELECT r.zone, r.station_code, r.station_name, r.stop_count, zt.zone_stop_count,
@@ -78,7 +79,6 @@ cur.execute("""
     JOIN zone_totals zt ON zt.zone = r.zone
     WHERE r.rnk = 1
     ORDER BY pct_of_zone DESC
-    LIMIT 15
 """)
 insights["zone_concentration"] = cur.fetchall()
 

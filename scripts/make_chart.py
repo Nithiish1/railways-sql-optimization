@@ -20,7 +20,7 @@ plt.rcParams.update({
 })
 
 # ---------------------------------------------------------------- Chart 1
-# Before vs after, log scale, all 10 queries
+# Before vs after, log scale, all 7 queries
 labels = [f"Q{r['n']}" for r in results]
 before = [r["before_ms"] for r in results]
 after = [r["after_ms"] for r in results]
@@ -33,7 +33,7 @@ ax.bar([i - width / 2 for i in x], before, width, label="Before", color="#c0392b
 ax.bar([i + width / 2 for i in x], after, width, label="After", color="#27ae60")
 ax.set_yscale("log")
 ax.set_ylabel("Median time (ms, log scale)")
-ax.set_title("Before vs After — Query Optimizations (median of 5 runs)")
+ax.set_title("Before vs After — Query Optimizations (median of 5 runs; Q3 before is 1 run)")
 ax.set_xticks(list(x))
 ax.set_xticklabels(labels)
 ax.legend()

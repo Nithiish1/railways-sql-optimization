@@ -1,14 +1,14 @@
 """Write-path optimization: row-by-row autocommit vs transaction-wrapped vs bulk insert."""
-import pymysql
 import time
 import json
 import os
 
+from db import connect
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 N = 5000
 
-conn = pymysql.connect(host="localhost", user="root", password="root",
-                        port=3306, database="indian_railways", autocommit=True)
+conn = connect(autocommit=True)
 cur = conn.cursor()
 cur.execute("DROP TABLE IF EXISTS write_bench")
 cur.execute("""
